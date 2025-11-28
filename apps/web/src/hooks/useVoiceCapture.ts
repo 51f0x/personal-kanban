@@ -1,30 +1,55 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type SpeechRecognitionType = typeof window extends { webkitSpeechRecognition?: never }
-  ? never
-  : SpeechRecognition;
+type RecognitionResult = {
+  transcript: string;
+};
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: SpeechRecognitionType;
-  }
+type RecognitionAlternativeList = {
+  [index: number]: RecognitionResult;
+  length: number;
+};
+
+type RecognitionResultList = {
+  [index: number]: RecognitionAlternativeList;
+  length: number;
+};
+
+interface RecognitionEvent {
+  results: RecognitionResultList;
 }
 
+type RecognitionInstance = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: RecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+};
+
+type RecognitionConstructor = new () => RecognitionInstance;
+
 export function useVoiceCapture() {
-  const recognitionRef = useRef<SpeechRecognitionType | null>(null);
+  const recognitionRef = useRef<RecognitionInstance | null>(null);
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
 
   useEffect(() => {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const globalWindow = window as typeof window & {
+      SpeechRecognition?: RecognitionConstructor;
+      webkitSpeechRecognition?: RecognitionConstructor;
+    };
+
+    const Recognition = globalWindow.SpeechRecognition || globalWindow.webkitSpeechRecognition;
     if (Recognition) {
       setSupported(true);
-      const recognition = new Recognition();
+      const recognition = new Recognition() as unknown as RecognitionInstance;
       recognition.lang = 'en-US';
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
+      recognition.onresult = (event: RecognitionEvent) => {
         const text = event.results[0][0].transcript;
         setTranscript((prev) => `${prev} ${text}`.trim());
       };

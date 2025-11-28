@@ -60,7 +60,26 @@ export class TaskService {
   }
 
   async updateTask(id: string, input: UpdateTaskDto) {
-    const { tags, ...data } = input;
+    const { tags, columnId, projectId, metadata, ...rest } = input;
+
+    const data: Prisma.TaskUpdateInput = {
+      ...rest,
+      metadata:
+        metadata === undefined ? undefined : metadata === null ? Prisma.JsonNull : metadata,
+      project:
+        projectId === undefined
+          ? undefined
+          : projectId === null
+            ? { disconnect: true }
+            : { connect: { id: projectId } },
+      column:
+        columnId === undefined
+          ? undefined
+          : {
+              connect: { id: columnId },
+            },
+    };
+
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.update({
         where: { id },

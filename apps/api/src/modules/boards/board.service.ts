@@ -38,7 +38,17 @@ export class BoardService {
   }
 
   updateBoard(id: string, input: UpdateBoardDto) {
-    const data = input;
+    const data: Prisma.BoardUpdateInput = {
+      name: input.name,
+      description: input.description === undefined ? undefined : input.description,
+      config:
+        input.config === undefined
+          ? undefined
+          : input.config === null
+            ? Prisma.JsonNull
+            : input.config,
+    };
+
     return this.prisma.board.update({
       where: { id },
       data,

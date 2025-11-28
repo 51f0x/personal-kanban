@@ -13,6 +13,8 @@
     "paths": {
       "@personal-kanban/shared": ["packages/shared/src"],
       "@personal-kanban/shared/*": ["packages/shared/src/*"]
-    }
+    },
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   }
 }
