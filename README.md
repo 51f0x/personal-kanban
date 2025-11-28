@@ -137,3 +137,16 @@ docker/        # Dockerfiles for api/worker/web
 - Replace placeholder tests with real API/UI suites when ready—scripts are already wired for Jest/Vitest.
 
 For any questions or contributions, open an issue or PR. Happy self-hosting! 🚀
+
+---
+
+## Concept at a Glance
+
+This project recreates the GTD-centric LeanKit workflow described in the Medium article, but as a fully self-owned platform:
+
+1. **One capture funnel:** Every idea, email, reminder, link, or voice note funnels into the Input column via quick-capture surfaces (web/PWA, browser extension, IMAP, `/capture` API). No third-party automation services are required.
+2. **Clarify once, work contextually:** Cards flow through GTD lanes—define next actions, mark “waiting on”, park in Someday/Maybe, or drop into context lanes (Email, Calls, Meetings, Desk, Read/Watch). WIP indicators keep focus tight.
+3. **Automatable nervous system:** Prisma models, TaskEvents, and BullMQ-ready workers allow IFTTT/Zapier-style rules, recurring templates (weekly review, daily check-ins), stale detection, and analytics (CFD, lead/cycle time).
+4. **Self-hosted transparency:** Dockerized stack with NestJS/React/Redis/Postgres, realtime Socket.IO updates, IMAP/SMPP connectors, and PWA/offline-first capture gives you complete control over data, automation, and deployment environment.
+
+Think of it as “Personal Kanban + GTD + native automation glue,” purpose-built for single owners or small teams who want LeanKit-style flow metrics and capture reliability without renting SaaS automation tools.
