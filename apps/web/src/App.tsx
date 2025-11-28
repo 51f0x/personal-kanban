@@ -1,4 +1,5 @@
 import { BoardCard } from './components/BoardCard';
+import { CaptureForm } from './components/CaptureForm';
 import { useBoards } from './hooks/useBoards';
 import './app.css';
 
@@ -31,6 +32,8 @@ export function App() {
 
       {error && <div className="banner error">Error: {error}</div>}
       {loading && <div className="banner">Loading boards…</div>}
+
+      <CaptureForm boards={boards} ownerId={ownerId} onCaptured={refresh} />
 
       <div className="boards-grid">
         {boards.map((board) => (
