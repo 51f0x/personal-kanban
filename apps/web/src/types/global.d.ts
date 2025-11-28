@@ -31,3 +31,10 @@ interface SpeechRecognitionAlternative {
   readonly confidence: number;
   readonly transcript: string;
 }
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}

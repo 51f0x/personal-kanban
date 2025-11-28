@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TaskEventType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { BoardGateway } from '../realtime/board.gateway';
 import { CreateTaskDto } from './dto/create-task.input';
 import { UpdateTaskDto } from './dto/update-task.input';
 
 @Injectable()
 export class TaskService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly boardGateway: BoardGateway) {}
 
   async createTask(input: CreateTaskDto) {
     return this.prisma.$transaction(async (tx) => {
@@ -53,6 +54,7 @@ export class TaskService {
         },
       });
 
+      this.boardGateway.emitBoardUpdate(task.boardId, { type: 'task.created', taskId: task.id });
       return task;
     });
   }
@@ -83,6 +85,7 @@ export class TaskService {
         },
       });
 
+      this.boardGateway.emitBoardUpdate(task.boardId, { type: 'task.updated', taskId: task.id });
       return task;
     });
   }

@@ -1,7 +1,10 @@
 import { Logger } from '@nestjs/common';
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
@@ -24,6 +27,14 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     this.logger.verbose(`Client disconnected ${client.id}`);
+  }
+
+  @SubscribeMessage('join')
+  handleJoin(@ConnectedSocket() client: Socket, @MessageBody() payload: { boardId?: string }) {
+    if (payload?.boardId) {
+      client.join(payload.boardId);
+      this.logger.verbose(`Client ${client.id} joined board ${payload.boardId}`);
+    }
   }
 
   emitBoardUpdate(boardId: string, payload: unknown) {

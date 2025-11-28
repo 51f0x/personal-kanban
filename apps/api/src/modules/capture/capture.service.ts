@@ -28,7 +28,7 @@ export class CaptureService {
 
     const parsed = parseCaptureText(dto.text);
 
-    return this.taskService.createTask({
+    const task = await this.taskService.createTask({
       boardId: board.id,
       columnId: targetColumn.id,
       ownerId: dto.ownerId,
@@ -41,5 +41,7 @@ export class CaptureService {
       },
       needsBreakdown: true,
     });
+
+    return task;
   }
 }

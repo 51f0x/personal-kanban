@@ -1,10 +1,32 @@
 import { BoardCard } from './components/BoardCard';
 import { CaptureForm } from './components/CaptureForm';
+import { OwnerSelector } from './components/OwnerSelector';
 import { useBoards } from './hooks/useBoards';
+import { useUsers } from './hooks/useUsers';
+import { useBoardRealtime } from './hooks/useBoardRealtime';
 import './app.css';
 
 export function App() {
-  const { ownerId, setOwnerId, boards, loading, error, refresh } = useBoards();
+  const {
+    users,
+    ownerId,
+    setOwnerId,
+    loading: usersLoading,
+    error: usersError,
+    createUser,
+  } = useUsers();
+  const {
+    boards,
+    loading: boardsLoading,
+    error: boardsError,
+    refresh,
+  } = useBoards(ownerId);
+  useBoardRealtime(
+    boards.map((board) => board.id),
+    refresh,
+  );
+  const loading = usersLoading || boardsLoading;
+  const error = usersError || boardsError;
 
   return (
     <main className="page">
@@ -17,12 +39,15 @@ export function App() {
           </p>
         </div>
         <div className="controls">
-          <label htmlFor="ownerId">Owner ID</label>
-          <input
-            id="ownerId"
-            value={ownerId}
-            placeholder="Paste user UUID"
-            onChange={(event) => setOwnerId(event.target.value)}
+          <OwnerSelector
+            users={users}
+            ownerId={ownerId}
+            setOwnerId={setOwnerId}
+            onRegister={async (payload) => {
+              await createUser(payload);
+              refresh();
+            }}
+            loading={usersLoading}
           />
           <button type="button" onClick={refresh} disabled={!ownerId || loading}>
             Refresh boards

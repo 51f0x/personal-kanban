@@ -49,11 +49,11 @@ export class ImapPollerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async pollMailbox() {
+  async pollMailbox() {
     if (!this.enabled || !this.client) return;
     const mailbox = this.config.get<string>('IMAP_MAILBOX') ?? 'INBOX';
     await this.client.mailboxOpen(mailbox);
-    const unseen = await this.client.search({ seen: false });
+    const unseen = (await this.client.search({ seen: false })) || [];
     if (!unseen.length) {
       return;
     }
@@ -64,6 +64,9 @@ export class ImapPollerService implements OnModuleInit, OnModuleDestroy {
 
     for (const sequence of unseen) {
       const message = await this.client.fetchOne(sequence, { source: true, envelope: true });
+      if (!message) {
+        continue;
+      }
       const subject = message.envelope?.subject || 'Email capture';
       const from = message.envelope?.from?.[0]?.address || 'unknown';
       const raw = message.source?.toString('utf8') ?? '';
@@ -83,5 +86,10 @@ export class ImapPollerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.log(`Processed ${unseen.length} email(s) into capture queue.`);
+  }
+
+  configureForTest(client: ImapFlow) {
+    this.client = client;
+    this.enabled = true;
   }
 }
