@@ -129,12 +129,67 @@ docker/        # Dockerfiles for api/worker/web
 
 ---
 
+## API Endpoints
+
+### Core Endpoints
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/v1/health | Health check |
+| GET | /api/v1/health/ready | Readiness probe (DB + Redis) |
+| GET | /api/v1/health/live | Liveness probe |
+| GET | /api/v1/users | List users |
+| POST | /api/v1/users/register | Register user + seed board |
+| GET | /api/v1/boards | List boards for owner |
+| GET | /api/v1/boards/:id | Get board with columns |
+| GET | /api/v1/boards/:id/tasks | List tasks for board |
+| POST | /api/v1/tasks | Create task |
+| PATCH | /api/v1/tasks/:id | Update task |
+| POST | /api/v1/tasks/:id/move | Move task with WIP validation |
+| DELETE | /api/v1/tasks/:id | Delete task |
+
+### Clarification (GTD Wizard)
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/v1/boards/:id/clarify/next | Get next unclarified task |
+| POST | /api/v1/tasks/:id/clarify | Apply GTD clarification |
+| GET | /api/v1/boards/:id/clarify/stats | Clarification statistics |
+
+### Automation Rules
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/v1/boards/:id/rules | List rules |
+| POST | /api/v1/boards/:id/rules | Create rule |
+| PATCH | /api/v1/rules/:id | Update rule |
+| POST | /api/v1/rules/:id/toggle | Enable/disable |
+| DELETE | /api/v1/rules/:id | Delete rule |
+
+### Recurring Templates
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/v1/boards/:id/templates | List templates |
+| POST | /api/v1/boards/:id/templates | Create template |
+| POST | /api/v1/templates/:id/skip | Skip next occurrence |
+| POST | /api/v1/templates/:id/run | Run now |
+
+### Analytics
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /api/v1/boards/:id/analytics/summary | Board summary |
+| GET | /api/v1/boards/:id/analytics/cfd | CFD data |
+| GET | /api/v1/boards/:id/analytics/throughput | Throughput metrics |
+| GET | /api/v1/boards/:id/analytics/lead-cycle | Lead/cycle times |
+| GET | /api/v1/boards/:id/analytics/stale | Stale tasks |
+| GET | /api/v1/boards/:id/analytics/wip-breaches | WIP breaches |
+
+---
+
 ## Next Steps / Customization
 
-- Extend `TaskService`, automation rules, or analytics modules for deeper GTD insights.
-- Enable HTTPS + reverse proxy (Caddy/Nginx) for production deployments.
-- Wire BullMQ queues (e.g., via Redis) for rule execution, recurring templates, and metrics snapshots.
-- Replace placeholder tests with real API/UI suites when ready—scripts are already wired for Jest/Vitest.
+- **Board UI**: Install @dnd-kit for drag-and-drop Kanban board interface
+- **Worker Processors**: Implement BullMQ processors for rule execution and template scheduling
+- **Full Authentication**: Add session/JWT-based auth with user passwords
+- Enable HTTPS + reverse proxy (Caddy/Nginx) for production deployments
+- Replace placeholder tests with comprehensive test suites
 
 For any questions or contributions, open an issue or PR. Happy self-hosting! 🚀
 
