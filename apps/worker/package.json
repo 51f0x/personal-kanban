@@ -4,6 +4,7 @@
   "private": true,
   "main": "dist/main.js",
   "scripts": {
+    "prebuild": "pnpm --filter @personal-kanban/shared build",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
