@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { BoardCard } from './components/BoardCard';
 import { CaptureForm } from './components/CaptureForm';
 import { OwnerSelector } from './components/OwnerSelector';
+import { KanbanBoard } from './components/KanbanBoard';
 import { useBoards } from './hooks/useBoards';
 import { useUsers } from './hooks/useUsers';
 import { useBoardRealtime } from './hooks/useBoardRealtime';
+import { Board } from './api/types';
 import './app.css';
 
 export function App() {
@@ -25,8 +28,23 @@ export function App() {
     boards.map((board) => board.id),
     refresh,
   );
+
+  const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
+
   const loading = usersLoading || boardsLoading;
   const error = usersError || boardsError;
+
+  // Show Kanban board view when a board is selected
+  if (selectedBoard) {
+    return (
+      <main className="page full-width">
+        <KanbanBoard
+          board={selectedBoard}
+          onBack={() => setSelectedBoard(null)}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="page">
@@ -62,7 +80,11 @@ export function App() {
 
       <div className="boards-grid">
         {boards.map((board) => (
-          <BoardCard key={board.id} board={board} />
+          <BoardCard
+            key={board.id}
+            board={board}
+            onOpen={() => setSelectedBoard(board)}
+          />
         ))}
 
         {!loading && !boards.length && ownerId && (

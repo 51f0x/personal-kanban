@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.input';
 import { UpdateTaskDto } from './dto/update-task.input';
+import { MoveTaskDto } from './dto/move-task.input';
 
 @Controller()
 export class TaskController {
@@ -17,6 +18,15 @@ export class TaskController {
     return this.taskService.listTasksForBoard(boardId);
   }
 
+  @Get('boards/:boardId/tasks/stale')
+  getStaleTasks(
+    @Param('boardId') boardId: string,
+    @Query('days') days?: string,
+  ) {
+    const thresholdDays = days ? parseInt(days, 10) : 7;
+    return this.taskService.getStaleTasks(boardId, thresholdDays);
+  }
+
   @Post('tasks')
   createTask(@Body() dto: CreateTaskDto) {
     return this.taskService.createTask(dto);
@@ -25,5 +35,15 @@ export class TaskController {
   @Patch('tasks/:id')
   updateTask(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
     return this.taskService.updateTask(id, dto);
+  }
+
+  @Post('tasks/:id/move')
+  moveTask(@Param('id') id: string, @Body() dto: MoveTaskDto) {
+    return this.taskService.moveTask(id, dto);
+  }
+
+  @Delete('tasks/:id')
+  deleteTask(@Param('id') id: string) {
+    return this.taskService.deleteTask(id);
   }
 }
