@@ -12,6 +12,75 @@
 - **Storage**: Postgres 14+ (JSONB for metadata), Redis 6+ for queues/cache, optional S3-compatible object storage for email payloads.
 - **Deployment**: Docker Compose (dev) and containerized services behind Nginx/Caddy with TLS; OpenTelemetry + Prometheus for observability.
 
+---
+
+## 2A. Current Implementation Status
+
+### Completed Components
+| Component | Status | Notes |
+| --- | --- | --- |
+| Monorepo structure | ✅ Complete | pnpm workspaces with apps/api, apps/worker, apps/web, packages/shared |
+| TypeScript + ESLint + Prettier | ✅ Complete | Project references configured |
+| Basic CI pipeline | ✅ Complete | GitHub Actions: lint → test → build |
+| Prisma schema | ✅ Complete | All entities defined (User, Board, Column, Task, Project, Tag, TaskEvent, Rule, RecurringTemplate) |
+| Database migrations | ✅ Complete | Initial migration with full schema |
+| User service | ✅ Complete | Registration with board seeding, list/get users |
+| Board service | ✅ Complete | CRUD operations, owner filtering |
+| Task service | ✅ Complete | Create/update with TaskEvent logging, WebSocket broadcast |
+| Project service | ✅ Complete | CRUD operations |
+| Capture service | ✅ Complete | Quick-add with text parsing, metadata extraction |
+| WebSocket gateway | ✅ Complete | Board rooms, join/disconnect handling, broadcast |
+| IMAP poller | ✅ Complete | ImapFlow integration, unseen message fetching, task creation |
+| Voice capture hook | ✅ Complete | Web Speech API with fallback |
+| Offline queue | ✅ Complete | localStorage queue with flush-on-online |
+| Browser extension | ✅ Complete | MV3 manifest, background script, options page |
+| Dockerfiles | ✅ Complete | Multi-stage builds for api, worker, web |
+
+### Partial/In-Progress Components
+| Component | Status | Remaining Work |
+| --- | --- | --- |
+| Docker Compose | ⚠️ Missing | Full docker-compose.yml with Postgres, Redis, services |
+| Health checks | ⚠️ Basic | Add readiness/liveness probes with dependencies |
+| Config validation | ⚠️ Partial | Add Joi schema validation for all env vars |
+| PWA service worker | ⚠️ Basic | Expand caching strategy, add manifest |
+| Capture token auth | ⚠️ Missing | Implement header validation middleware |
+| Task move operations | ⚠️ Incomplete | Add WIP validation, MOVED event, column reordering |
+
+### Not Yet Implemented
+| Component | Workstream | Priority |
+| --- | --- | --- |
+| GraphQL layer | WS2 | Medium |
+| Drag-and-drop board UI | WS2 | High |
+| WIP limit enforcement | WS2 | High |
+| Context/project filters UI | WS2 | Medium |
+| Clarification API | WS4 | High |
+| GTD wizard UI | WS4 | High |
+| Someday/Waiting views | WS4 | Medium |
+| Checklist management UI | WS4 | Medium |
+| Rule CRUD API | WS5 | High |
+| Trigger adapters | WS5 | High |
+| Condition evaluator | WS5 | High |
+| Action executors | WS5 | High |
+| BullMQ rule processors | WS5 | High |
+| Template CRUD API | WS6 | Medium |
+| Scheduler worker | WS6 | Medium |
+| RRULE processing | WS6 | Medium |
+| Column snapshots table | WS7 | Medium |
+| Analytics aggregation | WS7 | Medium |
+| CFD/metrics APIs | WS7 | Medium |
+| Review dashboard | WS7 | Medium |
+| Authentication (session + JWT) | WS8 | Critical |
+| Rate limiting | WS8 | High |
+| CSRF protection | WS8 | High |
+| OpenTelemetry integration | WS8 | Medium |
+| Prometheus metrics | WS8 | Medium |
+| Backup scripts | WS8 | Medium |
+| Unit test coverage | Testing | High |
+| Integration tests | Testing | High |
+| E2E tests (Playwright) | Testing | Medium |
+
+---
+
 ## 3. Workstreams & Deliverables
 
 ### WS0 – Environment & Foundations (Week 1)
@@ -20,15 +89,102 @@
 - Stand up Docker Compose: Postgres, Redis, Mailhog, MinIO (optional), API, worker, web.
 - Implement health checks, config management, and secret handling (dotenv + validation).
 
+#### WS0 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Create docker-compose.yml | `/docker/docker-compose.yml` | Services: postgres:14, redis:7, mailhog, minio (optional), api, worker, web; volumes for data persistence; network isolation |
+| Create .env.example | `/.env.example` | All environment variables with defaults and documentation |
+| Health check endpoint | `/apps/api/src/presentation/health.controller.ts` | Add `/health/ready` (checks DB + Redis) and `/health/live` (always 200) |
+| Config validation schema | `/apps/api/src/shared/config.schema.ts` | Joi schema validating: DATABASE_URL, REDIS_URL, API_PORT, CAPTURE_ACCESS_TOKEN, CORS_ORIGIN |
+| Worker health check | `/apps/worker/src/health.ts` | Redis connection check, BullMQ queue status |
+
+```yaml
+# docker-compose.yml structure
+services:
+  postgres:
+    image: postgres:14-alpine
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    environment: [POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
+    healthcheck: pg_isready
+  redis:
+    image: redis:7-alpine
+    volumes: [redis_data:/data]
+    healthcheck: redis-cli ping
+  api:
+    build: {context: .., dockerfile: docker/Dockerfile.api}
+    depends_on: [postgres, redis]
+    ports: ["3000:3000"]
+    env_file: .env
+  worker:
+    build: {context: .., dockerfile: docker/Dockerfile.worker}
+    depends_on: [postgres, redis]
+    env_file: .env
+  web:
+    build: {context: .., dockerfile: docker/Dockerfile.web}
+    ports: ["5173:80"]
+```
+
 ### WS1 – Core Domain & Persistence (Weeks 1–2)
 - Define schema for users, boards, columns, tasks, projects, tags, task events, rules, recurring templates.
 - Implement Prisma/TypeORM migrations, repositories, and domain services (TaskService, BoardService, ProjectService).
 - Add transactional outbox pattern for TaskEvents (table + publisher service) and seed initial columns/wip limits.
 
+#### WS1 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Add Outbox table | `/prisma/schema.prisma` | `model Outbox { id, aggregateType, aggregateId, eventType, payload, createdAt, processedAt }` |
+| Outbox publisher service | `/apps/api/src/modules/events/outbox.service.ts` | Poll unprocessed entries, publish to Redis/BullMQ, mark processed |
+| Column seeding | `/prisma/seed.ts` | Default columns: Input, Next Actions, In Progress (WIP:3), Waiting, Someday, Done, Archive |
+| TaskEvent enhancement | `/apps/api/src/modules/tasks/task.service.ts` | Record fromColumnId on moves, add MOVED event type distinction |
+
+```typescript
+// Outbox schema addition
+model Outbox {
+  id            String   @id @default(uuid()) @db.Uuid
+  aggregateType String   // "Task", "Rule", etc.
+  aggregateId   String   @db.Uuid
+  eventType     String   // "task.created", "task.moved", etc.
+  payload       Json
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+  @@index([processedAt])
+}
+```
+
 ### WS2 – Board API & UI (Weeks 2–4)
 - REST/GraphQL endpoints for boards, columns, tasks, drag/drop move operations with validation + WIP limit rules.
 - WebSocket gateway broadcasting TaskEvents per board via Redis pub/sub.
 - React board view with drag/drop (dnd-kit), column configuration, WIP indicators, context filters, project filters, Inbox-only view.
+
+#### WS2 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Task move endpoint | `/apps/api/src/modules/tasks/task.controller.ts` | `POST /tasks/:id/move` with { columnId, position? }; validates WIP limits |
+| WIP validation service | `/apps/api/src/modules/boards/wip.service.ts` | Check column task count vs wipLimit; return { allowed, currentCount, limit } |
+| Column CRUD endpoints | `/apps/api/src/modules/boards/column.controller.ts` | GET/POST/PATCH/DELETE for columns; reorder endpoint |
+| Tag CRUD endpoints | `/apps/api/src/modules/tags/tag.controller.ts` | Board-scoped tag management |
+| Board UI component | `/apps/web/src/components/Board.tsx` | Full Kanban view with columns |
+| Column component | `/apps/web/src/components/Column.tsx` | Droppable zone with WIP indicator |
+| TaskCard component | `/apps/web/src/components/TaskCard.tsx` | Draggable card with context badge, due date, project |
+| Install dnd-kit | `/apps/web/package.json` | Add @dnd-kit/core, @dnd-kit/sortable |
+| Context filter bar | `/apps/web/src/components/FilterBar.tsx` | Toggle buttons for EMAIL, MEETING, PHONE, etc. |
+| Project filter dropdown | `/apps/web/src/components/ProjectFilter.tsx` | Dropdown to filter tasks by project |
+
+```typescript
+// Move endpoint specification
+@Post('tasks/:id/move')
+async moveTask(
+  @Param('id') id: string,
+  @Body() dto: MoveTaskDto
+): Promise<{ task: Task; wipStatus: WipStatus }> {
+  // 1. Validate target column exists
+  // 2. Check WIP limit (warn or block based on board config)
+  // 3. Update task.columnId, task.lastMovedAt
+  // 4. Create TaskEvent with type=MOVED, fromColumnId, toColumnId
+  // 5. Emit WebSocket board:update
+  // 6. Return updated task with WIP status
+}
+```
 
 ### WS3 – Capture Pipeline (Weeks 4–6)
 - Quick-add endpoint + UI (text + optional voice capture using Web Speech API; fallback when unavailable).
@@ -36,10 +192,79 @@
 - WebExtension MVP hitting signed webhook endpoint (token scoped per device, rate limited).
 - IMAP poller worker using `imapflow`: fetch unseen mail, persist raw message (S3/MinIO), create Input queue tasks with email metadata.
 
+#### WS3 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Capture auth guard | `/apps/api/src/guards/capture-token.guard.ts` | Validate `x-capture-token` header against CAPTURE_ACCESS_TOKEN env |
+| Rate limit middleware | `/apps/api/src/middleware/rate-limit.middleware.ts` | Use `@nestjs/throttler` with configurable limits (default: 60/min) |
+| PWA manifest | `/apps/web/public/manifest.json` | name, icons, start_url, display: standalone, theme_color |
+| Enhanced service worker | `/apps/web/public/sw.js` | Precache core assets, runtime caching for API, background sync for captures |
+| Extension settings storage | `/extensions/quick-capture/background.js` | Secure token storage with chrome.storage.local |
+| IMAP error handling | `/apps/worker/src/modules/integrations/imap.poller.ts` | Exponential backoff (1s→2s→4s→max 5min), reconnection logic |
+| Email attachment storage | `/apps/worker/src/modules/integrations/attachment.service.ts` | S3/MinIO upload for attachments > 10KB |
+
+```typescript
+// Capture guard implementation
+@Injectable()
+export class CaptureTokenGuard implements CanActivate {
+  constructor(private config: ConfigService) {}
+  
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const token = request.headers['x-capture-token'];
+    const expected = this.config.get('CAPTURE_ACCESS_TOKEN');
+    if (!expected) return true; // Token not configured = open
+    return token === expected;
+  }
+}
+```
+
 ### WS4 – Clarification & GTD Wizard (Weeks 5–7)
 - Clarification mode API: fetch single unclarified task, step-by-step decisions (actionable, two-minute, next action entry, context, project, waiting-for, due date, breakdown flag).
 - UI wizard with keyboard shortcuts + metrics on throughput.
 - Someday/Waiting dedicated views and checklist support in tasks.
+
+#### WS4 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Clarification service | `/apps/api/src/modules/clarification/clarification.service.ts` | `getNextUnclarified(boardId)`, `clarifyTask(id, decisions)` |
+| Clarification controller | `/apps/api/src/modules/clarification/clarification.controller.ts` | GET /boards/:id/clarify/next, POST /tasks/:id/clarify |
+| Clarification module | `/apps/api/src/modules/clarification/clarification.module.ts` | Register service and controller |
+| Clarification DTOs | `/apps/api/src/modules/clarification/dto/` | `ClarifyTaskDto { actionable, twoMinute, nextAction, context, projectId, waitingFor, dueAt, needsBreakdown, targetColumn }` |
+| Checklist CRUD | `/apps/api/src/modules/tasks/checklist.controller.ts` | POST /tasks/:id/checklist, PATCH /checklist/:id, DELETE /checklist/:id |
+| Wizard component | `/apps/web/src/components/ClarificationWizard.tsx` | Multi-step modal with keyboard navigation |
+| Wizard step components | `/apps/web/src/components/wizard/` | ActionableStep, TwoMinuteStep, NextActionStep, ContextStep, etc. |
+| Someday view | `/apps/web/src/pages/SomedayView.tsx` | List tasks in SOMEDAY columns with review actions |
+| Waiting view | `/apps/web/src/pages/WaitingView.tsx` | List tasks with waitingFor set, grouped by contact |
+| Stale tasks view | `/apps/web/src/pages/StaleView.tsx` | Tasks with lastMovedAt > 7 days |
+| useKeyboardShortcuts hook | `/apps/web/src/hooks/useKeyboardShortcuts.ts` | y/n for actionable, 1-5 for context selection, Enter to proceed |
+
+```typescript
+// Clarification flow specification
+interface ClarifyTaskDto {
+  actionable: boolean;        // Step 1: Is this actionable?
+  twoMinute?: boolean;        // Step 2: Can it be done in <2 min?
+  nextAction?: string;        // Step 3: What's the next physical action?
+  context?: TaskContext;      // Step 4: Which context? (EMAIL, PHONE, etc.)
+  projectId?: string;         // Step 5: Link to project?
+  waitingFor?: string;        // Step 6: Waiting on someone?
+  dueAt?: Date;              // Step 7: Due date?
+  needsBreakdown?: boolean;   // Step 8: Needs breakdown into subtasks?
+  targetColumn?: string;      // Computed: Where should this go?
+}
+
+// Clarification service logic
+async clarifyTask(id: string, dto: ClarifyTaskDto) {
+  // Decision tree:
+  // - Not actionable + reference → Archive
+  // - Not actionable + someday → Someday column
+  // - Not actionable + trash → Delete or Won't Do
+  // - Actionable + <2min → Done Immediately (do now)
+  // - Actionable + waiting → Waiting column + set waitingFor
+  // - Actionable + has context → Context column
+  // - Default → Next Actions column
+}
+```
 
 ### WS5 – Automation Engine (Weeks 7–9)
 - Rule entity CRUD, JSON schema validation, versioning, and audit logs.
@@ -48,21 +273,203 @@
 - Action executors (create/update/move task, checklist management, notifications, email archive hook) with idempotency + retries.
 - Worker processors for event-driven rules (`rules:triggered`) and scheduled jobs (`rules:scheduled`).
 
+#### WS5 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Rule service | `/apps/api/src/modules/rules/rule.service.ts` | CRUD operations, validation, enable/disable |
+| Rule controller | `/apps/api/src/modules/rules/rule.controller.ts` | GET/POST/PATCH/DELETE endpoints |
+| Rule run model | `/prisma/schema.prisma` | `model RuleRun { id, ruleId, eventId, status, startedAt, finishedAt, error, logs }` |
+| Trigger registry | `/apps/worker/src/modules/rules/triggers/trigger.registry.ts` | Map trigger types to adapters |
+| Task triggers | `/apps/worker/src/modules/rules/triggers/task.triggers.ts` | task.created, task.moved, task.completed handlers |
+| Schedule triggers | `/apps/worker/src/modules/rules/triggers/schedule.triggers.ts` | Cron/RRULE evaluation |
+| Stale trigger | `/apps/worker/src/modules/rules/triggers/stale.trigger.ts` | Detect tasks with lastMovedAt > threshold |
+| Condition evaluator | `/apps/worker/src/modules/rules/conditions/evaluator.ts` | Parse and evaluate condition JSON |
+| Field conditions | `/apps/worker/src/modules/rules/conditions/field.conditions.ts` | equals, contains, gt, lt, in, between |
+| Tag/project conditions | `/apps/worker/src/modules/rules/conditions/relation.conditions.ts` | hasTag, hasProject, inColumn |
+| Action registry | `/apps/worker/src/modules/rules/actions/action.registry.ts` | Map action types to executors |
+| Task actions | `/apps/worker/src/modules/rules/actions/task.actions.ts` | createTask, updateTask, moveTask, completeTask |
+| Notification actions | `/apps/worker/src/modules/rules/actions/notification.actions.ts` | sendEmail, inAppNotify |
+| Rule processor | `/apps/worker/src/modules/rules/rule.processor.ts` | BullMQ processor for rules:triggered queue |
+| Idempotency service | `/apps/worker/src/modules/rules/idempotency.service.ts` | Track rule runs by eventId + ruleId combo |
+| Rule builder UI | `/apps/web/src/components/RuleBuilder.tsx` | Visual rule creation interface |
+
+```typescript
+// Rule JSON schema specification
+interface RuleDefinition {
+  trigger: {
+    type: 'task.created' | 'task.moved' | 'task.completed' | 'stale' | 'schedule' | 'email.received';
+    config?: {
+      schedule?: string;      // cron or RRULE for schedule trigger
+      staleThreshold?: number; // days for stale trigger
+      fromColumn?: string;    // for task.moved
+      toColumn?: string;      // for task.moved
+    };
+  };
+  conditions: Array<{
+    field: string;           // 'title', 'context', 'tags', 'project', 'age', 'dueIn'
+    operator: 'eq' | 'ne' | 'contains' | 'in' | 'gt' | 'lt' | 'between';
+    value: unknown;
+  }>;
+  actions: Array<{
+    type: 'createTask' | 'updateTask' | 'moveTask' | 'addTag' | 'addChecklist' | 'notify' | 'stop';
+    config: Record<string, unknown>;
+  }>;
+}
+
+// BullMQ queue setup
+// Queue: rules:triggered - event-driven rule evaluation
+// Queue: rules:scheduled - cron-based rule checks
+// Queue: rules:stale - periodic stale detection scan
+```
+
 ### WS6 – Recurring Templates & Scheduler (Weeks 9–10)
 - Template builder UI (payload editor, RRULE/cron config, timezone).
 - Scheduler worker computing `next_run_at`, enqueuing template execution, handling skips/dismissals.
 - Weekly review template seeded with checklist + analytics links; optional email reminder via SMTP.
+
+#### WS6 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Template service | `/apps/api/src/modules/templates/template.service.ts` | CRUD, activate/deactivate, compute nextRunAt |
+| Template controller | `/apps/api/src/modules/templates/template.controller.ts` | GET/POST/PATCH/DELETE endpoints |
+| RRULE parser | `/apps/worker/src/modules/scheduler/rrule.parser.ts` | Use `rrule` package to parse and compute next occurrence |
+| Scheduler worker | `/apps/worker/src/modules/scheduler/scheduler.worker.ts` | Poll templates where nextRunAt <= now, enqueue creation |
+| Template executor | `/apps/worker/src/modules/scheduler/template.executor.ts` | Create task from template payload, update nextRunAt |
+| Skip/dismiss API | `/apps/api/src/modules/templates/template.controller.ts` | POST /templates/:id/skip, POST /templates/:id/dismiss |
+| Weekly review seed | `/prisma/seed.ts` | Create "Weekly Review" template with checklist items |
+| SMTP notification | `/apps/worker/src/modules/notifications/email.service.ts` | Nodemailer integration for reminder emails |
+| Template builder UI | `/apps/web/src/components/TemplateBuilder.tsx` | Form for payload, schedule, timezone |
+| RRULE picker | `/apps/web/src/components/RRulePicker.tsx` | Visual recurrence rule builder |
+
+```typescript
+// Weekly review template seed
+const weeklyReviewTemplate = {
+  name: 'Weekly Review',
+  description: 'GTD weekly review checklist',
+  payload: {
+    title: 'Weekly Review - {{date}}',
+    needsBreakdown: false,
+    checklist: [
+      { title: 'Clear inbox to zero', isDone: false },
+      { title: 'Review calendar (past week)', isDone: false },
+      { title: 'Review calendar (upcoming week)', isDone: false },
+      { title: 'Review Waiting For list', isDone: false },
+      { title: 'Review Someday/Maybe list', isDone: false },
+      { title: 'Review project list', isDone: false },
+      { title: 'Review stale tasks', isDone: false },
+      { title: 'Mind sweep - capture new items', isDone: false },
+    ],
+    metadata: {
+      analyticsUrl: '/analytics/weekly',
+      staleTasksUrl: '/views/stale',
+    }
+  },
+  rrule: 'FREQ=WEEKLY;BYDAY=FR;BYHOUR=9',
+  timezone: 'America/New_York',
+};
+```
 
 ### WS7 – Analytics & Review Surfaces (Weeks 10–12)
 - TaskEvent ingestion into snapshots (hourly/daily column counts) + lead/cycle calculations.
 - API endpoints feeding CFD, lead/cycle scatter, aging WIP, stale-task list.
 - Weekly review dashboard referencing analytics, stale tasks, WIP breaches, Someday/Waiting review flows.
 
+#### WS7 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| ColumnSnapshot model | `/prisma/schema.prisma` | `model ColumnSnapshot { id, boardId, columnId, timestamp, taskCount, wipBreached }` |
+| TaskMetric model | `/prisma/schema.prisma` | `model TaskMetric { id, taskId, leadTime, cycleTime, completedAt }` |
+| Snapshot worker | `/apps/worker/src/modules/analytics/snapshot.worker.ts` | Hourly job: count tasks per column, store snapshots |
+| Metrics calculator | `/apps/worker/src/modules/analytics/metrics.calculator.ts` | On task complete: calculate lead time (created→done), cycle time (first work column→done) |
+| Analytics service | `/apps/api/src/modules/analytics/analytics.service.ts` | Query snapshots, aggregate metrics |
+| Analytics controller | `/apps/api/src/modules/analytics/analytics.controller.ts` | GET /analytics/cfd, /analytics/throughput, /analytics/lead-time |
+| CFD endpoint | `/apps/api/src/modules/analytics/analytics.controller.ts` | Return time-series data for cumulative flow diagram |
+| Stale tasks endpoint | `/apps/api/src/modules/analytics/analytics.controller.ts` | GET /analytics/stale - tasks with lastMovedAt > threshold |
+| WIP breach history | `/apps/api/src/modules/analytics/analytics.controller.ts` | GET /analytics/wip-breaches - timeline of limit violations |
+| CFD chart component | `/apps/web/src/components/charts/CFDChart.tsx` | Area chart using recharts or chart.js |
+| Lead/cycle scatter | `/apps/web/src/components/charts/LeadCycleScatter.tsx` | Scatter plot of lead vs cycle times |
+| Throughput chart | `/apps/web/src/components/charts/ThroughputChart.tsx` | Bar chart of weekly completions |
+| Review dashboard page | `/apps/web/src/pages/ReviewDashboard.tsx` | Combined view: metrics, stale list, action items |
+| Aging WIP indicator | `/apps/web/src/components/AgingWipBadge.tsx` | Color-coded age indicator on task cards |
+
+```typescript
+// Analytics API specification
+interface CFDDataPoint {
+  timestamp: Date;
+  columns: Record<string, number>; // columnId → task count
+}
+
+interface ThroughputData {
+  period: string;        // '2024-W01', '2024-01-15'
+  completed: number;
+  created: number;
+}
+
+interface LeadCycleMetric {
+  taskId: string;
+  title: string;
+  leadTimeDays: number;  // created → completed
+  cycleTimeDays: number; // first work column → completed
+  completedAt: Date;
+}
+```
+
 ### WS8 – DevOps, Security, Hardening (Weeks 12–13)
 - Authentication (session + JWT for extensions), CSRF protection, rate limiting, RBAC hooks.
 - Observability: OpenTelemetry tracing, Prometheus metrics (queue lag, rule failures), structured logging.
 - Backup strategy (Postgres dumps, Redis snapshot policy), disaster recovery scripts.
 - Load/perf tests on board interactions and automation throughput; docs for deployment, environment variables, upgrade path.
+
+#### WS8 Detailed Tasks (Gap Fill)
+| Task | File/Location | Specification |
+| --- | --- | --- |
+| Auth module | `/apps/api/src/modules/auth/` | Passport.js with local + JWT strategies |
+| Session store | `/apps/api/src/modules/auth/session.store.ts` | Redis-backed session storage |
+| JWT service | `/apps/api/src/modules/auth/jwt.service.ts` | Issue, verify, refresh tokens |
+| Auth guards | `/apps/api/src/guards/` | SessionGuard, JwtGuard, RolesGuard |
+| Password hashing | `/apps/api/src/modules/auth/password.service.ts` | Argon2 hashing |
+| CSRF middleware | `/apps/api/src/middleware/csrf.middleware.ts` | csurf integration for browser requests |
+| Rate limiter | `/apps/api/src/modules/rate-limit/` | @nestjs/throttler with Redis store |
+| RBAC decorator | `/apps/api/src/decorators/roles.decorator.ts` | @Roles('owner', 'viewer') decorator |
+| OpenTelemetry setup | `/apps/api/src/telemetry/tracing.ts` | OTLP exporter configuration |
+| Prometheus metrics | `/apps/api/src/metrics/prometheus.module.ts` | prom-client with custom metrics |
+| Custom metrics | `/apps/api/src/metrics/custom.metrics.ts` | api_requests_total, queue_depth, rule_executions |
+| Structured logging | `/apps/api/src/logging/logger.service.ts` | Winston/Pino with JSON format, correlation IDs |
+| Backup script | `/scripts/backup.sh` | pg_dump, redis-cli BGSAVE, S3 upload |
+| Restore script | `/scripts/restore.sh` | Download from S3, pg_restore, redis-cli restore |
+| k6 load tests | `/tests/load/board.k6.js` | Simulate board operations under load |
+| k6 automation tests | `/tests/load/automation.k6.js` | Simulate rule triggers at scale |
+| Security scan CI | `/.github/workflows/security.yml` | npm audit, Snyk, OWASP ZAP baseline |
+
+```typescript
+// Auth configuration specification
+interface AuthConfig {
+  session: {
+    secret: string;
+    maxAge: number;        // 24h default
+    store: 'redis';
+  };
+  jwt: {
+    secret: string;
+    accessExpiry: string;  // '15m'
+    refreshExpiry: string; // '7d'
+  };
+  rateLimit: {
+    ttl: number;           // 60 seconds
+    limit: number;         // 100 requests
+    captureLimit: number;  // 60 requests (separate limit)
+  };
+}
+
+// Prometheus metrics
+const metrics = {
+  httpRequestsTotal: new Counter({ name: 'http_requests_total', labelNames: ['method', 'path', 'status'] }),
+  httpRequestDuration: new Histogram({ name: 'http_request_duration_seconds', labelNames: ['method', 'path'] }),
+  bullmqQueueDepth: new Gauge({ name: 'bullmq_queue_depth', labelNames: ['queue'] }),
+  ruleExecutionsTotal: new Counter({ name: 'rule_executions_total', labelNames: ['rule_id', 'status'] }),
+  tasksCreatedTotal: new Counter({ name: 'tasks_created_total', labelNames: ['source'] }),
+};
+```
 
 ## 4. Milestones & Timeline (Indicative)
 | Week | Milestone | Key Deliverables |
@@ -97,6 +504,136 @@
 - **Security tests**: dependency scanning (npm audit + Snyk), OWASP zap baseline, auth/ZAP for CSRF and rate limits.
 - **Acceptance gates**: each milestone requires demo + passing regression suite before next workstream begins.
 
+### 7A. Detailed Testing Specifications (Gap Fill)
+
+#### Unit Test Coverage Requirements
+| Module | Coverage Target | Key Test Cases |
+| --- | --- | --- |
+| TaskService | 90% | create with tags/checklist, update with column change, TaskEvent creation |
+| BoardService | 85% | CRUD operations, column ordering |
+| CaptureService | 85% | text parsing, URL extraction, column resolution |
+| ClarificationService | 90% | all GTD decision paths, column routing |
+| RuleService | 90% | CRUD, enable/disable, validation |
+| ConditionEvaluator | 95% | all operators, edge cases (null values, missing fields) |
+| ActionExecutor | 90% | all action types, idempotency |
+| TemplateService | 85% | RRULE parsing, next run calculation |
+| AnalyticsService | 85% | CFD aggregation, lead/cycle calculation |
+
+#### Test File Structure
+```
+/apps/api/src/modules/
+├── tasks/
+│   ├── __tests__/
+│   │   ├── task.service.spec.ts
+│   │   ├── task.controller.spec.ts
+│   │   └── fixtures/
+│   │       └── task.fixtures.ts
+├── boards/
+│   ├── __tests__/
+│   │   ├── board.service.spec.ts
+│   │   ├── wip.service.spec.ts
+│   │   └── column.controller.spec.ts
+...
+
+/apps/worker/src/modules/
+├── rules/
+│   ├── __tests__/
+│   │   ├── condition-evaluator.spec.ts
+│   │   ├── action-executor.spec.ts
+│   │   ├── rule.processor.spec.ts
+│   │   └── triggers/
+│   │       ├── task.triggers.spec.ts
+│   │       └── schedule.triggers.spec.ts
+...
+
+/tests/
+├── integration/
+│   ├── board-workflow.spec.ts
+│   ├── capture-flow.spec.ts
+│   ├── rule-execution.spec.ts
+│   └── testcontainers.setup.ts
+├── e2e/
+│   ├── playwright.config.ts
+│   ├── capture-to-done.spec.ts
+│   ├── clarification-wizard.spec.ts
+│   ├── automation-rules.spec.ts
+│   └── weekly-review.spec.ts
+├── load/
+│   ├── board.k6.js
+│   ├── automation.k6.js
+│   └── capture.k6.js
+```
+
+#### Integration Test Scenarios
+```typescript
+// tests/integration/board-workflow.spec.ts
+describe('Board Workflow', () => {
+  // Setup: Start Testcontainers for Postgres + Redis
+  
+  it('should create task and emit WebSocket event', async () => {});
+  it('should move task and enforce WIP limits', async () => {});
+  it('should create TaskEvent on move with fromColumn/toColumn', async () => {});
+  it('should broadcast board:update via WebSocket', async () => {});
+});
+
+// tests/integration/rule-execution.spec.ts
+describe('Rule Execution', () => {
+  it('should trigger rule on task.created event', async () => {});
+  it('should evaluate all conditions correctly', async () => {});
+  it('should execute actions in order', async () => {});
+  it('should prevent duplicate execution via idempotency', async () => {});
+  it('should stop propagation when action.stop is encountered', async () => {});
+});
+```
+
+#### E2E Test Scenarios (Playwright)
+```typescript
+// tests/e2e/capture-to-done.spec.ts
+test.describe('Capture to Done Flow', () => {
+  test('capture via quick-add → clarify → context lane → complete', async ({ page }) => {
+    // 1. Login/select owner
+    // 2. Open capture form
+    // 3. Enter task text
+    // 4. Submit and verify in Input column
+    // 5. Open clarification wizard
+    // 6. Answer: actionable=yes, context=DESK
+    // 7. Verify task moved to Desk context column
+    // 8. Drag to Done column
+    // 9. Verify completion timestamp
+  });
+  
+  test('offline capture → sync → visible on board', async ({ page, context }) => {
+    // 1. Simulate offline via context.setOffline(true)
+    // 2. Submit capture
+    // 3. Verify queued indicator
+    // 4. Restore online
+    // 5. Verify sync and task appearance
+  });
+});
+```
+
+#### Load Test Specifications (k6)
+```javascript
+// tests/load/board.k6.js
+export const options = {
+  stages: [
+    { duration: '1m', target: 50 },   // Ramp up
+    { duration: '5m', target: 50 },   // Steady state
+    { duration: '1m', target: 100 },  // Spike
+    { duration: '5m', target: 100 },  // High load
+    { duration: '2m', target: 0 },    // Ramp down
+  ],
+  thresholds: {
+    http_req_duration: ['p95<300'],    // 95% under 300ms
+    http_req_failed: ['rate<0.01'],    // Less than 1% failure
+  },
+};
+
+export default function() {
+  // Simulate: list boards, get tasks, move task, create task
+}
+```
+
 ## 8. Deployment & Ops Plan
 - **Environments**: local (Docker Compose), staging (single VM), production (HA pair). Config via `.env` + Secrets Manager; migrations run through CI job.
 - **CI/CD**: GitHub Actions pipeline (lint → test → build → docker image → helm/compose deploy). Tag-based releases, semantic versioning.
@@ -126,3 +663,341 @@
 - Will mobile capture need native wrappers beyond PWA? (impact on roadmap).
 - Are analytics retention requirements defined (e.g., 12 months vs indefinite)?
 - Confirm timezone handling expectations for recurring templates across daylight saving changes.
+
+---
+
+## 12. Priority Execution Roadmap (Gap Fill)
+
+Based on the current implementation status, the following priority order addresses critical gaps while maintaining system stability.
+
+### Phase 1: Infrastructure Completion (Days 1-3) 🔴 Critical
+**Objective**: Enable local development with full stack via Docker Compose.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Create docker-compose.yml | 2h | Dockerfiles exist |
+| P0 | Create .env.example | 1h | None |
+| P0 | Add health check endpoints | 2h | API running |
+| P1 | Config validation with Joi | 2h | None |
+| P1 | Add Prisma seed script | 2h | Schema complete |
+
+### Phase 2: Core Board UI (Days 4-10) 🔴 Critical
+**Objective**: Usable Kanban board with drag-and-drop.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Install @dnd-kit and setup | 2h | None |
+| P0 | Create Board component | 4h | None |
+| P0 | Create Column component | 4h | Board |
+| P0 | Create TaskCard component | 4h | Column |
+| P0 | Task move endpoint with WIP | 4h | API |
+| P1 | Context filter bar | 3h | Board |
+| P1 | WIP indicators | 2h | Column |
+| P1 | Column CRUD endpoints | 4h | API |
+
+### Phase 3: Security Foundation (Days 11-15) 🔴 Critical
+**Objective**: Protect API with authentication and rate limiting.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Capture token guard | 2h | None |
+| P0 | Rate limiting middleware | 3h | None |
+| P1 | Session authentication | 6h | Redis |
+| P1 | JWT for extensions | 4h | Auth module |
+| P2 | CSRF protection | 2h | Session auth |
+
+### Phase 4: GTD Clarification (Days 16-23) 🟡 High
+**Objective**: Complete GTD workflow with clarification wizard.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Clarification service | 4h | Task service |
+| P0 | Clarification controller | 2h | Clarification service |
+| P0 | Wizard UI component | 8h | React |
+| P1 | Keyboard shortcuts hook | 3h | Wizard |
+| P1 | Someday/Waiting views | 4h | Board |
+| P1 | Checklist CRUD | 4h | Task service |
+
+### Phase 5: Automation Engine (Days 24-35) 🟡 High
+**Objective**: Working rule engine with triggers and actions.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Rule service CRUD | 4h | API |
+| P0 | RuleRun schema addition | 1h | Prisma |
+| P0 | Trigger registry | 4h | Worker |
+| P0 | Condition evaluator | 6h | Worker |
+| P0 | Action executors | 6h | Worker |
+| P0 | BullMQ rule processor | 4h | All above |
+| P1 | Idempotency service | 3h | Processor |
+| P1 | Rule builder UI | 8h | React |
+
+### Phase 6: Recurring Templates (Days 36-42) 🟢 Medium
+**Objective**: Scheduled task creation from templates.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Template service | 4h | API |
+| P0 | RRULE parser integration | 3h | rrule package |
+| P0 | Scheduler worker | 4h | Worker |
+| P1 | Weekly review seed | 2h | Template service |
+| P1 | Template builder UI | 6h | React |
+| P2 | Email reminders | 4h | SMTP |
+
+### Phase 7: Analytics Dashboard (Days 43-52) 🟢 Medium
+**Objective**: Metrics visualization and weekly review.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Column snapshot model | 1h | Prisma |
+| P0 | Snapshot worker | 4h | Worker |
+| P0 | Analytics service | 4h | API |
+| P0 | CFD endpoint | 3h | Analytics service |
+| P1 | CFD chart component | 4h | recharts |
+| P1 | Review dashboard page | 6h | React |
+| P2 | Lead/cycle metrics | 4h | Analytics |
+
+### Phase 8: Testing & Hardening (Days 53-60) 🟢 Medium
+**Objective**: Production-ready quality and observability.
+
+| Priority | Task | Effort | Dependencies |
+| --- | --- | --- | --- |
+| P0 | Unit tests for services | 12h | All services |
+| P0 | Integration tests | 8h | Testcontainers |
+| P1 | E2E Playwright tests | 8h | Full stack |
+| P1 | OpenTelemetry setup | 4h | API |
+| P1 | Prometheus metrics | 4h | API |
+| P2 | k6 load tests | 4h | Full stack |
+| P2 | Backup scripts | 3h | Postgres/Redis |
+
+---
+
+## 13. Appendix A: Environment Variables Reference
+
+```bash
+# .env.example - Complete configuration reference
+
+# ===== Database =====
+DATABASE_URL=postgresql://postgres:password@localhost:5432/kanban
+DATABASE_POOL_SIZE=10
+
+# ===== Redis =====
+REDIS_URL=redis://localhost:6379
+REDIS_QUEUE_PREFIX=pk
+
+# ===== API Server =====
+API_PORT=3000
+API_HOST=0.0.0.0
+CORS_ORIGIN=http://localhost:5173
+NODE_ENV=development
+
+# ===== Security =====
+CAPTURE_ACCESS_TOKEN=your-secure-token-here
+SESSION_SECRET=your-session-secret-here
+JWT_SECRET=your-jwt-secret-here
+JWT_ACCESS_EXPIRY=15m
+JWT_REFRESH_EXPIRY=7d
+
+# ===== Rate Limiting =====
+RATE_LIMIT_TTL=60
+RATE_LIMIT_MAX=100
+CAPTURE_RATE_LIMIT_MAX=60
+
+# ===== IMAP (Optional) =====
+IMAP_HOST=
+IMAP_PORT=993
+IMAP_SECURE=true
+IMAP_USERNAME=
+IMAP_PASSWORD=
+IMAP_MAILBOX=INBOX
+IMAP_POLL_INTERVAL_MS=60000
+IMAP_DEFAULT_BOARD_ID=
+IMAP_DEFAULT_OWNER_ID=
+IMAP_DEFAULT_COLUMN_ID=
+
+# ===== SMTP (Optional) =====
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=noreply@example.com
+
+# ===== Object Storage (Optional) =====
+S3_ENDPOINT=http://localhost:9000
+S3_BUCKET=kanban-attachments
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+
+# ===== Observability =====
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+LOG_LEVEL=info
+LOG_FORMAT=json
+```
+
+---
+
+## 14. Appendix B: API Endpoint Reference
+
+### Core Endpoints (Implemented)
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | /health | Health check |
+| GET | /users | List users |
+| POST | /users/register | Register user + seed board |
+| GET | /users/:id | Get user by ID |
+| GET | /boards | List boards for owner |
+| GET | /boards/:id | Get board with columns |
+| POST | /boards | Create board |
+| PATCH | /boards/:id | Update board |
+| GET | /boards/:boardId/tasks | List tasks for board |
+| GET | /tasks/:id | Get task by ID |
+| POST | /tasks | Create task |
+| PATCH | /tasks/:id | Update task |
+| POST | /api/v1/capture | Quick capture |
+
+### Planned Endpoints (Gap Fill)
+| Method | Path | Description | WS |
+| --- | --- | --- | --- |
+| POST | /tasks/:id/move | Move task to column | WS2 |
+| GET | /columns/:id | Get column | WS2 |
+| POST | /boards/:id/columns | Create column | WS2 |
+| PATCH | /columns/:id | Update column | WS2 |
+| DELETE | /columns/:id | Delete column | WS2 |
+| POST | /columns/reorder | Reorder columns | WS2 |
+| GET | /boards/:id/tags | List tags | WS2 |
+| POST | /boards/:id/tags | Create tag | WS2 |
+| PATCH | /tags/:id | Update tag | WS2 |
+| DELETE | /tags/:id | Delete tag | WS2 |
+| GET | /boards/:id/clarify/next | Get next unclarified | WS4 |
+| POST | /tasks/:id/clarify | Submit clarification | WS4 |
+| POST | /tasks/:id/checklist | Add checklist item | WS4 |
+| PATCH | /checklist/:id | Update checklist item | WS4 |
+| DELETE | /checklist/:id | Delete checklist item | WS4 |
+| GET | /boards/:id/rules | List rules | WS5 |
+| POST | /boards/:id/rules | Create rule | WS5 |
+| PATCH | /rules/:id | Update rule | WS5 |
+| DELETE | /rules/:id | Delete rule | WS5 |
+| POST | /rules/:id/toggle | Enable/disable rule | WS5 |
+| GET | /boards/:id/templates | List templates | WS6 |
+| POST | /boards/:id/templates | Create template | WS6 |
+| PATCH | /templates/:id | Update template | WS6 |
+| DELETE | /templates/:id | Delete template | WS6 |
+| POST | /templates/:id/skip | Skip next occurrence | WS6 |
+| GET | /analytics/cfd | CFD data | WS7 |
+| GET | /analytics/throughput | Throughput metrics | WS7 |
+| GET | /analytics/lead-time | Lead/cycle times | WS7 |
+| GET | /analytics/stale | Stale tasks list | WS7 |
+| GET | /analytics/wip-breaches | WIP breach history | WS7 |
+
+---
+
+## 15. Appendix C: WebSocket Events Reference
+
+### Current Events
+| Event | Direction | Payload | Description |
+| --- | --- | --- | --- |
+| join | Client → Server | `{ boardId }` | Join board room |
+| board:update | Server → Client | `{ type, taskId, timestamp }` | Task changed |
+
+### Planned Events (Gap Fill)
+| Event | Direction | Payload | Description |
+| --- | --- | --- | --- |
+| task:created | Server → Client | `{ task, boardId }` | New task created |
+| task:moved | Server → Client | `{ taskId, fromColumn, toColumn }` | Task moved |
+| task:updated | Server → Client | `{ taskId, changes }` | Task fields updated |
+| task:deleted | Server → Client | `{ taskId }` | Task deleted |
+| wip:breach | Server → Client | `{ columnId, current, limit }` | WIP limit exceeded |
+| rule:triggered | Server → Client | `{ ruleId, taskId, actions }` | Rule executed |
+| template:created | Server → Client | `{ taskId, templateId }` | Recurring task created |
+| notification | Server → Client | `{ type, message, link }` | User notification |
+
+---
+
+## 16. Appendix D: Database Schema Additions (Gap Fill)
+
+```prisma
+// Additional models to add to schema.prisma
+
+model Outbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String
+  aggregateId   String    @db.Uuid
+  eventType     String
+  payload       Json
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+
+  @@index([processedAt])
+  @@index([createdAt])
+}
+
+model RuleRun {
+  id         String   @id @default(uuid()) @db.Uuid
+  ruleId     String   @db.Uuid
+  eventId    String?  @db.Uuid
+  status     String   // 'pending', 'running', 'success', 'failed'
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  error      String?
+  logs       Json?
+  rule       Rule     @relation(fields: [ruleId], references: [id])
+
+  @@index([ruleId])
+  @@index([status])
+}
+
+model ColumnSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  boardId     String   @db.Uuid
+  columnId    String   @db.Uuid
+  timestamp   DateTime @default(now())
+  taskCount   Int
+  wipBreached Boolean  @default(false)
+  board       Board    @relation(fields: [boardId], references: [id])
+  column      Column   @relation(fields: [columnId], references: [id])
+
+  @@index([boardId, timestamp])
+  @@index([columnId])
+}
+
+model TaskMetric {
+  id           String   @id @default(uuid()) @db.Uuid
+  taskId       String   @unique @db.Uuid
+  leadTimeSec  Int      // seconds from created to completed
+  cycleTimeSec Int      // seconds from first work column to completed
+  completedAt  DateTime
+  task         Task     @relation(fields: [taskId], references: [id])
+
+  @@index([completedAt])
+}
+
+model Notification {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  channel     String    // 'in_app', 'email'
+  type        String    // 'rule_triggered', 'reminder', 'stale_alert'
+  payload     Json
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([deliveredAt])
+}
+```
+
+---
+
+## 17. Conclusion
+
+This implementation plan provides a comprehensive roadmap from the current state to full GTD + Kanban platform functionality. Key takeaways:
+
+1. **Foundation is solid**: Core data model, services, and capture mechanisms are implemented
+2. **Critical gaps**: Docker Compose, board UI, authentication, and automation engine are the highest priority
+3. **Phased approach**: 8 phases over ~60 days covers all major functionality
+4. **Testing investment**: Comprehensive testing strategy ensures production readiness
+5. **Clear specifications**: Each workstream now has detailed task breakdowns with file locations
+
+The priority execution roadmap (Section 12) should be used to guide sprint planning, with Phase 1-3 being essential for any production deployment.
