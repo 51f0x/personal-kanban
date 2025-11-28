@@ -88,3 +88,41 @@
 - Less than 5% failed jobs in BullMQ under normal load.
 - Weekly review task auto-generated with analytics links and stale list each Friday.
 - Deployment reproducible via single `docker compose up` and documented environment variables.
+
+## 7. Quality & Testing Strategy
+- **Unit tests**: minimum 80% coverage on domain services, rule evaluators, schedulers (Jest). Each Nest module ships with factories/mocks in `packages/testing`.
+- **Integration tests**: spin Postgres/Redis via Testcontainers; verify board moves, rule execution, IMAP ingestion, recurring scheduler.
+- **End-to-end tests**: Playwright suite covering capture → clarify → done flows, automation, analytics dashboards.
+- **Load & soak tests**: k6 scripts simulating board interactions + 1k automation events/hour; queue lag alarms when p95 > 5s.
+- **Security tests**: dependency scanning (npm audit + Snyk), OWASP zap baseline, auth/ZAP for CSRF and rate limits.
+- **Acceptance gates**: each milestone requires demo + passing regression suite before next workstream begins.
+
+## 8. Deployment & Ops Plan
+- **Environments**: local (Docker Compose), staging (single VM), production (HA pair). Config via `.env` + Secrets Manager; migrations run through CI job.
+- **CI/CD**: GitHub Actions pipeline (lint → test → build → docker image → helm/compose deploy). Tag-based releases, semantic versioning.
+- **Observability**: OpenTelemetry exporters -> OTLP collector -> Prometheus/Grafana; alerting for queue depth, API latency, IMAP failures, disk usage.
+- **Backup/restore**: nightly Postgres dumps + WAL archiving, Redis snapshot every 30 min, object storage replication for captured emails.
+- **Runbooks**: incident procedures for queue backlog, IMAP auth errors, failed rule job, stale scheduler.
+
+## 9. Documentation Deliverables
+- **Architecture overview** (C4, data flows) updated per release.
+- **API reference** with OpenAPI schema + SDK generation (shared package consumed by web/extension).
+- **Operations guide**: provisioning steps, environment variables, TLS/SMTP/IMAP configuration, backup scripts.
+- **User guides**: capture workflows, clarification wizard, automation builder, analytics interpretation, weekly review checklist.
+- **Extension guide**: installation, token management, permission rationale.
+
+## 10. Resource & Responsibility Matrix
+| Role | Primary Scope | Key Outputs |
+| --- | --- | --- |
+| Tech Lead | Overall architecture, backlog orchestration, code reviews | ADRs, design approvals, release readiness |
+| Backend Engineer(s) | Nest services, data model, rules engine, workers | APIs, migrations, automation, scheduler |
+| Frontend Engineer(s) | React/PWA, board UX, wizard, analytics dashboards | SPA, extension, UI tests |
+| DevOps/Infra | CI/CD, observability, deployment hardening | Pipelines, monitoring, runbooks |
+| QA Engineer | Test plans, automation, release validation | Regression suites, test reports |
+
+## 11. Open Questions & Dependencies
+- Do we require multi-user permissions in v1 or is single-owner sufficient? (affects auth + sharing).
+- Storage location for captured email bodies—local disk vs external object store? (cost + compliance).
+- Will mobile capture need native wrappers beyond PWA? (impact on roadmap).
+- Are analytics retention requirements defined (e.g., 12 months vs indefinite)?
+- Confirm timezone handling expectations for recurring templates across daylight saving changes.
