@@ -14,70 +14,138 @@
 
 ---
 
-## 2A. Current Implementation Status
+## 2A. Current Implementation Status (Updated: Gap Analysis)
 
-### Completed Components
-| Component | Status | Notes |
-| --- | --- | --- |
-| Monorepo structure | ✅ Complete | pnpm workspaces with apps/api, apps/worker, apps/web, packages/shared |
-| TypeScript + ESLint + Prettier | ✅ Complete | Project references configured |
-| Basic CI pipeline | ✅ Complete | GitHub Actions: lint → test → build |
-| Prisma schema | ✅ Complete | All entities defined (User, Board, Column, Task, Project, Tag, TaskEvent, Rule, RecurringTemplate) |
-| Database migrations | ✅ Complete | Initial migration with full schema |
-| User service | ✅ Complete | Registration with board seeding, list/get users |
-| Board service | ✅ Complete | CRUD operations, owner filtering |
-| Task service | ✅ Complete | Create/update with TaskEvent logging, WebSocket broadcast |
-| Project service | ✅ Complete | CRUD operations |
-| Capture service | ✅ Complete | Quick-add with text parsing, metadata extraction |
-| WebSocket gateway | ✅ Complete | Board rooms, join/disconnect handling, broadcast |
-| IMAP poller | ✅ Complete | ImapFlow integration, unseen message fetching, task creation |
-| Voice capture hook | ✅ Complete | Web Speech API with fallback |
-| Offline queue | ✅ Complete | localStorage queue with flush-on-online |
-| Browser extension | ✅ Complete | MV3 manifest, background script, options page |
-| Dockerfiles | ✅ Complete | Multi-stage builds for api, worker, web |
+### Phase Completion Summary
+| Phase | Status | Completion | Next Actions |
+| --- | --- | --- | --- |
+| Phase 1: Infrastructure | ✅ Complete | 100% | — |
+| Phase 2: Core Board UI | ✅ Complete | 100% | — |
+| Phase 3: Security Foundation | ⚠️ Partial | 40% | Session/JWT auth, CSRF |
+| Phase 4: GTD Clarification | ⚠️ Partial | 50% | Wizard UI, Someday/Waiting views |
+| Phase 5: Automation Engine | ⚠️ Partial | 25% | Worker-side rule engine |
+| Phase 6: Recurring Templates | ⚠️ Partial | 25% | Scheduler worker, RRULE parser |
+| Phase 7: Analytics Dashboard | ⚠️ Partial | 30% | Snapshot worker, Chart UIs |
+| Phase 8: Testing & Hardening | ❌ Minimal | 5% | Tests, observability, backups |
 
-### Partial/In-Progress Components
-| Component | Status | Remaining Work |
-| --- | --- | --- |
-| Docker Compose | ⚠️ Missing | Full docker-compose.yml with Postgres, Redis, services |
-| Health checks | ⚠️ Basic | Add readiness/liveness probes with dependencies |
-| Config validation | ⚠️ Partial | Add Joi schema validation for all env vars |
-| PWA service worker | ⚠️ Basic | Expand caching strategy, add manifest |
-| Capture token auth | ⚠️ Missing | Implement header validation middleware |
-| Task move operations | ⚠️ Incomplete | Add WIP validation, MOVED event, column reordering |
+### Completed Components ✅
+| Component | Status | Location | Notes |
+| --- | --- | --- | --- |
+| Monorepo structure | ✅ | `/` | pnpm workspaces with apps/api, apps/worker, apps/web, packages/shared |
+| TypeScript + ESLint + Prettier | ✅ | `/` | Project references configured |
+| Basic CI pipeline | ✅ | `.github/workflows/ci.yml` | lint → test → build |
+| Prisma schema (core) | ✅ | `prisma/schema.prisma` | User, Board, Column, Task, Project, Tag, TaskEvent, Rule, RecurringTemplate |
+| Database migrations | ✅ | `prisma/migrations/` | Initial migration complete |
+| Database seed script | ✅ | `prisma/seed.ts` | Demo user, GTD board, columns, tags, sample tasks, weekly review template |
+| Docker Compose | ✅ | `docker/docker-compose.yml` | Full stack: Postgres, Redis, Mailhog, MinIO, API, Worker, Web |
+| .env.example | ✅ | `.env.example` | All environment variables documented |
+| Health check endpoints | ✅ | `apps/api/src/presentation/health.controller.ts` | `/health`, `/health/ready`, `/health/live` |
+| Config validation | ✅ | `apps/api/src/shared/config.module.ts` | Joi schema for all env vars |
+| User service | ✅ | `apps/api/src/modules/auth/` | Registration with board seeding |
+| Board service | ✅ | `apps/api/src/modules/boards/` | CRUD, column management |
+| Task service | ✅ | `apps/api/src/modules/tasks/` | CRUD, move with WIP, TaskEvent logging |
+| Column service | ✅ | `apps/api/src/modules/boards/column.service.ts` | CRUD, reordering |
+| WIP validation service | ✅ | `apps/api/src/modules/boards/wip.service.ts` | WIP limit checks |
+| Project service | ✅ | `apps/api/src/modules/projects/` | CRUD operations |
+| Capture service | ✅ | `apps/api/src/modules/capture/` | Quick-add with text parsing |
+| Capture token guard | ✅ | `apps/api/src/guards/capture-token.guard.ts` | Header validation |
+| Rate limiting | ✅ | `apps/api/src/modules/rate-limit/` | @nestjs/throttler integration |
+| Tag service | ✅ | `apps/api/src/modules/tags/` | Board-scoped tag CRUD |
+| Clarification service | ✅ | `apps/api/src/modules/clarification/` | GTD decision routing (API) |
+| Checklist service | ✅ | `apps/api/src/modules/tasks/checklist.service.ts` | CRUD, reordering |
+| Rule service (API) | ✅ | `apps/api/src/modules/rules/` | CRUD, validation, toggle, duplicate |
+| Template service (API) | ✅ | `apps/api/src/modules/templates/` | CRUD, nextRunAt management |
+| Analytics service (API) | ✅ | `apps/api/src/modules/analytics/` | CFD, throughput, lead/cycle, stale, WIP breaches |
+| WebSocket gateway | ✅ | `apps/api/src/modules/realtime/` | Board rooms, broadcasts |
+| IMAP poller | ✅ | `apps/worker/src/modules/integrations/imap.poller.ts` | Email capture to tasks |
+| Kanban Board UI | ✅ | `apps/web/src/components/KanbanBoard.tsx` | Drag-and-drop with dnd-kit |
+| TaskCard component | ✅ | `apps/web/src/components/TaskCard.tsx` | Draggable task cards |
+| KanbanColumn component | ✅ | `apps/web/src/components/KanbanColumn.tsx` | Droppable columns with WIP indicator |
+| FilterBar component | ✅ | `apps/web/src/components/FilterBar.tsx` | Context, project, stale filters |
+| useTasks hook | ✅ | `apps/web/src/hooks/useTasks.ts` | Task state management with optimistic updates |
+| Voice capture hook | ✅ | `apps/web/src/hooks/useVoiceCapture.ts` | Web Speech API with fallback |
+| Offline queue | ✅ | `apps/web/src/hooks/useOfflineQueue.ts` | localStorage queue with flush |
+| Basic service worker | ✅ | `apps/web/public/sw.js` | Basic caching |
+| Browser extension | ✅ | `extensions/quick-capture/` | MV3, background script, options page |
+| Dockerfiles | ✅ | `docker/` | Multi-stage builds for api, worker, web |
 
-### Not Yet Implemented
-| Component | Workstream | Priority |
-| --- | --- | --- |
-| GraphQL layer | WS2 | Medium |
-| Drag-and-drop board UI | WS2 | High |
-| WIP limit enforcement | WS2 | High |
-| Context/project filters UI | WS2 | Medium |
-| Clarification API | WS4 | High |
-| GTD wizard UI | WS4 | High |
-| Someday/Waiting views | WS4 | Medium |
-| Checklist management UI | WS4 | Medium |
-| Rule CRUD API | WS5 | High |
-| Trigger adapters | WS5 | High |
-| Condition evaluator | WS5 | High |
-| Action executors | WS5 | High |
-| BullMQ rule processors | WS5 | High |
-| Template CRUD API | WS6 | Medium |
-| Scheduler worker | WS6 | Medium |
-| RRULE processing | WS6 | Medium |
-| Column snapshots table | WS7 | Medium |
-| Analytics aggregation | WS7 | Medium |
-| CFD/metrics APIs | WS7 | Medium |
-| Review dashboard | WS7 | Medium |
-| Authentication (session + JWT) | WS8 | Critical |
-| Rate limiting | WS8 | High |
-| CSRF protection | WS8 | High |
-| OpenTelemetry integration | WS8 | Medium |
-| Prometheus metrics | WS8 | Medium |
-| Backup scripts | WS8 | Medium |
-| Unit test coverage | Testing | High |
-| Integration tests | Testing | High |
-| E2E tests (Playwright) | Testing | Medium |
+### Partial/In-Progress Components ⚠️
+| Component | Status | Completion | What's Done | What's Missing |
+| --- | --- | --- | --- | --- |
+| Authentication | ⚠️ | 20% | Basic AuthModule, UserService | Session store, JWT, Passport.js, password hashing |
+| GTD Clarification UI | ⚠️ | 0% | API complete | ClarificationWizard, step components, keyboard shortcuts |
+| Someday/Waiting Views | ⚠️ | 0% | Data filters in API | Dedicated page components |
+| Rule Engine (Worker) | ⚠️ | 0% | API CRUD complete | Trigger registry, condition evaluator, action executors, BullMQ processors |
+| Scheduler Worker | ⚠️ | 0% | Template API complete | RRULE parser, scheduler polling, template executor |
+| Analytics Worker | ⚠️ | 0% | Analytics API complete | Snapshot worker, metrics calculator |
+| Analytics UI | ⚠️ | 0% | API endpoints ready | CFDChart, ThroughputChart, LeadCycleScatter, ReviewDashboard |
+| PWA | ⚠️ | 30% | Basic SW, offline queue | manifest.json, enhanced caching, background sync |
+
+### Not Yet Implemented ❌
+| Component | Location | Workstream | Priority | Effort |
+| --- | --- | --- | --- | --- |
+| **Schema Additions** |
+| Outbox model | `prisma/schema.prisma` | WS1 | Medium | 1h |
+| RuleRun model | `prisma/schema.prisma` | WS5 | High | 1h |
+| ColumnSnapshot model | `prisma/schema.prisma` | WS7 | Medium | 1h |
+| TaskMetric model | `prisma/schema.prisma` | WS7 | Medium | 1h |
+| Notification model | `prisma/schema.prisma` | WS8 | Medium | 1h |
+| **Authentication** |
+| Session store (Redis) | `apps/api/src/modules/auth/session.store.ts` | WS8 | Critical | 4h |
+| JWT service | `apps/api/src/modules/auth/jwt.service.ts` | WS8 | Critical | 4h |
+| Passport.js strategies | `apps/api/src/modules/auth/strategies/` | WS8 | Critical | 4h |
+| Password service (Argon2) | `apps/api/src/modules/auth/password.service.ts` | WS8 | Critical | 2h |
+| Auth guards (Session/JWT/Roles) | `apps/api/src/guards/` | WS8 | Critical | 3h |
+| CSRF middleware | `apps/api/src/middleware/csrf.middleware.ts` | WS8 | High | 2h |
+| **Worker Services** |
+| Trigger registry | `apps/worker/src/modules/rules/triggers/trigger.registry.ts` | WS5 | High | 4h |
+| Task triggers | `apps/worker/src/modules/rules/triggers/task.triggers.ts` | WS5 | High | 4h |
+| Schedule triggers | `apps/worker/src/modules/rules/triggers/schedule.triggers.ts` | WS5 | High | 3h |
+| Stale trigger | `apps/worker/src/modules/rules/triggers/stale.trigger.ts` | WS5 | Medium | 2h |
+| Condition evaluator | `apps/worker/src/modules/rules/conditions/evaluator.ts` | WS5 | High | 6h |
+| Action registry | `apps/worker/src/modules/rules/actions/action.registry.ts` | WS5 | High | 4h |
+| Task actions | `apps/worker/src/modules/rules/actions/task.actions.ts` | WS5 | High | 4h |
+| Notification actions | `apps/worker/src/modules/rules/actions/notification.actions.ts` | WS5 | Medium | 3h |
+| Rule processor (BullMQ) | `apps/worker/src/modules/rules/rule.processor.ts` | WS5 | High | 4h |
+| Idempotency service | `apps/worker/src/modules/rules/idempotency.service.ts` | WS5 | Medium | 3h |
+| RRULE parser | `apps/worker/src/modules/scheduler/rrule.parser.ts` | WS6 | High | 3h |
+| Scheduler worker | `apps/worker/src/modules/scheduler/scheduler.worker.ts` | WS6 | High | 4h |
+| Template executor | `apps/worker/src/modules/scheduler/template.executor.ts` | WS6 | High | 3h |
+| Snapshot worker | `apps/worker/src/modules/analytics/snapshot.worker.ts` | WS7 | Medium | 4h |
+| Metrics calculator | `apps/worker/src/modules/analytics/metrics.calculator.ts` | WS7 | Medium | 4h |
+| Email service (Nodemailer) | `apps/worker/src/modules/notifications/email.service.ts` | WS6 | Medium | 3h |
+| Outbox publisher | `apps/api/src/modules/events/outbox.service.ts` | WS1 | Medium | 4h |
+| **Frontend Components** |
+| ClarificationWizard | `apps/web/src/components/ClarificationWizard.tsx` | WS4 | High | 8h |
+| Wizard step components | `apps/web/src/components/wizard/` | WS4 | High | 6h |
+| useKeyboardShortcuts hook | `apps/web/src/hooks/useKeyboardShortcuts.ts` | WS4 | Medium | 3h |
+| SomedayView | `apps/web/src/pages/SomedayView.tsx` | WS4 | Medium | 4h |
+| WaitingView | `apps/web/src/pages/WaitingView.tsx` | WS4 | Medium | 4h |
+| StaleView | `apps/web/src/pages/StaleView.tsx` | WS4 | Medium | 3h |
+| RuleBuilder UI | `apps/web/src/components/RuleBuilder.tsx` | WS5 | High | 8h |
+| TemplateBuilder UI | `apps/web/src/components/TemplateBuilder.tsx` | WS6 | Medium | 6h |
+| RRulePicker | `apps/web/src/components/RRulePicker.tsx` | WS6 | Medium | 4h |
+| CFDChart | `apps/web/src/components/charts/CFDChart.tsx` | WS7 | Medium | 4h |
+| ThroughputChart | `apps/web/src/components/charts/ThroughputChart.tsx` | WS7 | Medium | 3h |
+| LeadCycleScatter | `apps/web/src/components/charts/LeadCycleScatter.tsx` | WS7 | Medium | 4h |
+| ReviewDashboard | `apps/web/src/pages/ReviewDashboard.tsx` | WS7 | Medium | 6h |
+| AgingWipBadge | `apps/web/src/components/AgingWipBadge.tsx` | WS7 | Low | 2h |
+| PWA manifest | `apps/web/public/manifest.json` | WS3 | Medium | 1h |
+| Enhanced service worker | `apps/web/public/sw.js` | WS3 | Medium | 4h |
+| **Testing** |
+| Unit tests (services) | `apps/api/src/modules/*/__tests__/` | Testing | High | 12h |
+| Unit tests (worker) | `apps/worker/src/modules/*/__tests__/` | Testing | High | 8h |
+| Integration tests | `tests/integration/` | Testing | High | 8h |
+| E2E tests (Playwright) | `tests/e2e/` | Testing | Medium | 8h |
+| k6 load tests | `tests/load/` | Testing | Low | 4h |
+| **Observability** |
+| OpenTelemetry setup | `apps/api/src/telemetry/` | WS8 | Medium | 4h |
+| Prometheus metrics | `apps/api/src/metrics/` | WS8 | Medium | 4h |
+| Structured logging | `apps/api/src/logging/` | WS8 | Medium | 3h |
+| **Operations** |
+| Backup scripts | `scripts/backup.sh` | WS8 | Medium | 3h |
+| Restore scripts | `scripts/restore.sh` | WS8 | Medium | 2h |
+| Security scan CI | `.github/workflows/security.yml` | WS8 | Medium | 2h |
 
 ---
 
@@ -666,109 +734,277 @@ export default function() {
 
 ---
 
-## 12. Priority Execution Roadmap (Gap Fill)
+## 12. Priority Execution Roadmap (Revised Gap Analysis)
 
-Based on the current implementation status, the following priority order addresses critical gaps while maintaining system stability.
+Based on the **current implementation status**, the following roadmap addresses the remaining gaps. Phases 1-2 are **COMPLETE** and have been moved to the "Completed Phases" section.
 
-### Phase 1: Infrastructure Completion (Days 1-3) 🔴 Critical
-**Objective**: Enable local development with full stack via Docker Compose.
+---
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Create docker-compose.yml | 2h | Dockerfiles exist |
-| P0 | Create .env.example | 1h | None |
-| P0 | Add health check endpoints | 2h | API running |
-| P1 | Config validation with Joi | 2h | None |
-| P1 | Add Prisma seed script | 2h | Schema complete |
+### Completed Phases ✅
 
-### Phase 2: Core Board UI (Days 4-10) 🔴 Critical
-**Objective**: Usable Kanban board with drag-and-drop.
+#### Phase 1: Infrastructure Completion ✅ COMPLETE
+All tasks completed: Docker Compose, .env.example, health checks, config validation, Prisma seed.
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Install @dnd-kit and setup | 2h | None |
-| P0 | Create Board component | 4h | None |
-| P0 | Create Column component | 4h | Board |
-| P0 | Create TaskCard component | 4h | Column |
-| P0 | Task move endpoint with WIP | 4h | API |
-| P1 | Context filter bar | 3h | Board |
-| P1 | WIP indicators | 2h | Column |
-| P1 | Column CRUD endpoints | 4h | API |
+#### Phase 2: Core Board UI ✅ COMPLETE
+All tasks completed: dnd-kit, KanbanBoard, KanbanColumn, TaskCard, FilterBar, move endpoint with WIP, column CRUD.
 
-### Phase 3: Security Foundation (Days 11-15) 🔴 Critical
-**Objective**: Protect API with authentication and rate limiting.
+---
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Capture token guard | 2h | None |
-| P0 | Rate limiting middleware | 3h | None |
-| P1 | Session authentication | 6h | Redis |
-| P1 | JWT for extensions | 4h | Auth module |
-| P2 | CSRF protection | 2h | Session auth |
+### Remaining Phases
 
-### Phase 4: GTD Clarification (Days 16-23) 🟡 High
-**Objective**: Complete GTD workflow with clarification wizard.
+### Phase 3: Security & Authentication (Days 1-7) 🔴 Critical
+**Objective**: Protect API with proper authentication and CSRF protection.
+**Current Status**: 40% complete (capture token guard and rate limiting done).
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Clarification service | 4h | Task service |
-| P0 | Clarification controller | 2h | Clarification service |
-| P0 | Wizard UI component | 8h | React |
-| P1 | Keyboard shortcuts hook | 3h | Wizard |
-| P1 | Someday/Waiting views | 4h | Board |
-| P1 | Checklist CRUD | 4h | Task service |
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| ✅ | Capture token guard | 2h | Done | — |
+| ✅ | Rate limiting middleware | 3h | Done | — |
+| P0 | Password service (Argon2) | 2h | TODO | None |
+| P0 | Passport.js local strategy | 4h | TODO | Password service |
+| P0 | Session store (Redis) | 4h | TODO | Redis, Passport |
+| P0 | JWT service | 4h | TODO | None |
+| P0 | JWT strategy (extensions) | 2h | TODO | JWT service |
+| P0 | Auth guards (Session/JWT) | 3h | TODO | Strategies |
+| P1 | CSRF middleware | 2h | TODO | Session auth |
+| P1 | Login/logout API | 2h | TODO | Auth guards |
+| P1 | Roles/RBAC decorator | 2h | TODO | Auth guards |
 
-### Phase 5: Automation Engine (Days 24-35) 🟡 High
-**Objective**: Working rule engine with triggers and actions.
+**Deliverables**:
+- `apps/api/src/modules/auth/password.service.ts`
+- `apps/api/src/modules/auth/jwt.service.ts`
+- `apps/api/src/modules/auth/strategies/local.strategy.ts`
+- `apps/api/src/modules/auth/strategies/jwt.strategy.ts`
+- `apps/api/src/modules/auth/session.store.ts`
+- `apps/api/src/guards/session.guard.ts`
+- `apps/api/src/guards/jwt.guard.ts`
+- `apps/api/src/guards/roles.guard.ts`
+- `apps/api/src/middleware/csrf.middleware.ts`
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Rule service CRUD | 4h | API |
-| P0 | RuleRun schema addition | 1h | Prisma |
-| P0 | Trigger registry | 4h | Worker |
-| P0 | Condition evaluator | 6h | Worker |
-| P0 | Action executors | 6h | Worker |
-| P0 | BullMQ rule processor | 4h | All above |
-| P1 | Idempotency service | 3h | Processor |
-| P1 | Rule builder UI | 8h | React |
+### Phase 4: GTD Clarification UI (Days 8-15) 🟡 High
+**Objective**: Complete GTD workflow with clarification wizard frontend.
+**Current Status**: 50% complete (API complete, UI missing).
 
-### Phase 6: Recurring Templates (Days 36-42) 🟢 Medium
-**Objective**: Scheduled task creation from templates.
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| ✅ | Clarification service | 4h | Done | — |
+| ✅ | Clarification controller | 2h | Done | — |
+| ✅ | Checklist CRUD | 4h | Done | — |
+| P0 | ClarificationWizard component | 8h | TODO | React |
+| P0 | Wizard step components | 6h | TODO | Wizard |
+| P1 | useKeyboardShortcuts hook | 3h | TODO | Wizard |
+| P1 | SomedayView page | 4h | TODO | API |
+| P1 | WaitingView page | 4h | TODO | API |
+| P1 | StaleView page | 3h | TODO | API |
+| P2 | Task breakdown UI | 4h | TODO | Wizard |
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Template service | 4h | API |
-| P0 | RRULE parser integration | 3h | rrule package |
-| P0 | Scheduler worker | 4h | Worker |
-| P1 | Weekly review seed | 2h | Template service |
-| P1 | Template builder UI | 6h | React |
-| P2 | Email reminders | 4h | SMTP |
+**Deliverables**:
+- `apps/web/src/components/ClarificationWizard.tsx`
+- `apps/web/src/components/wizard/ActionableStep.tsx`
+- `apps/web/src/components/wizard/TwoMinuteStep.tsx`
+- `apps/web/src/components/wizard/NextActionStep.tsx`
+- `apps/web/src/components/wizard/ContextStep.tsx`
+- `apps/web/src/components/wizard/ProjectStep.tsx`
+- `apps/web/src/components/wizard/WaitingStep.tsx`
+- `apps/web/src/components/wizard/DueDateStep.tsx`
+- `apps/web/src/hooks/useKeyboardShortcuts.ts`
+- `apps/web/src/pages/SomedayView.tsx`
+- `apps/web/src/pages/WaitingView.tsx`
+- `apps/web/src/pages/StaleView.tsx`
 
-### Phase 7: Analytics Dashboard (Days 43-52) 🟢 Medium
-**Objective**: Metrics visualization and weekly review.
+### Phase 5: Automation Engine Worker (Days 16-28) 🟡 High
+**Objective**: Implement worker-side rule processing with BullMQ.
+**Current Status**: 25% complete (API CRUD done, no worker implementation).
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Column snapshot model | 1h | Prisma |
-| P0 | Snapshot worker | 4h | Worker |
-| P0 | Analytics service | 4h | API |
-| P0 | CFD endpoint | 3h | Analytics service |
-| P1 | CFD chart component | 4h | recharts |
-| P1 | Review dashboard page | 6h | React |
-| P2 | Lead/cycle metrics | 4h | Analytics |
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| ✅ | Rule service CRUD | 4h | Done | — |
+| ✅ | Rule controller | 2h | Done | — |
+| P0 | RuleRun schema model | 1h | TODO | Prisma |
+| P0 | Install BullMQ | 1h | TODO | Redis |
+| P0 | Trigger registry | 4h | TODO | BullMQ |
+| P0 | Task triggers (created/moved/completed) | 4h | TODO | Registry |
+| P0 | Schedule triggers | 3h | TODO | Registry |
+| P0 | Stale trigger | 2h | TODO | Registry |
+| P0 | Condition evaluator | 6h | TODO | Triggers |
+| P0 | Action registry | 4h | TODO | Evaluator |
+| P0 | Task actions | 4h | TODO | Registry |
+| P1 | Notification actions | 3h | TODO | Registry |
+| P0 | Rule processor (BullMQ) | 4h | TODO | All above |
+| P1 | Idempotency service | 3h | TODO | Processor |
+| P1 | RuleBuilder UI | 8h | TODO | React |
+| P1 | Outbox service | 4h | TODO | API |
 
-### Phase 8: Testing & Hardening (Days 53-60) 🟢 Medium
-**Objective**: Production-ready quality and observability.
+**Deliverables**:
+- `prisma/schema.prisma` (add RuleRun, Outbox models)
+- `apps/worker/src/modules/rules/rules.module.ts`
+- `apps/worker/src/modules/rules/triggers/trigger.registry.ts`
+- `apps/worker/src/modules/rules/triggers/task.triggers.ts`
+- `apps/worker/src/modules/rules/triggers/schedule.triggers.ts`
+- `apps/worker/src/modules/rules/triggers/stale.trigger.ts`
+- `apps/worker/src/modules/rules/conditions/evaluator.ts`
+- `apps/worker/src/modules/rules/conditions/field.conditions.ts`
+- `apps/worker/src/modules/rules/conditions/relation.conditions.ts`
+- `apps/worker/src/modules/rules/actions/action.registry.ts`
+- `apps/worker/src/modules/rules/actions/task.actions.ts`
+- `apps/worker/src/modules/rules/actions/notification.actions.ts`
+- `apps/worker/src/modules/rules/rule.processor.ts`
+- `apps/worker/src/modules/rules/idempotency.service.ts`
+- `apps/api/src/modules/events/outbox.service.ts`
+- `apps/web/src/components/RuleBuilder.tsx`
 
-| Priority | Task | Effort | Dependencies |
-| --- | --- | --- | --- |
-| P0 | Unit tests for services | 12h | All services |
-| P0 | Integration tests | 8h | Testcontainers |
-| P1 | E2E Playwright tests | 8h | Full stack |
-| P1 | OpenTelemetry setup | 4h | API |
-| P1 | Prometheus metrics | 4h | API |
-| P2 | k6 load tests | 4h | Full stack |
-| P2 | Backup scripts | 3h | Postgres/Redis |
+### Phase 6: Recurring Templates & Scheduler (Days 29-38) 🟢 Medium
+**Objective**: Implement scheduled task creation from templates.
+**Current Status**: 25% complete (API CRUD done, no scheduler worker).
+
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| ✅ | Template service | 4h | Done | — |
+| ✅ | Template controller | 2h | Done | — |
+| ✅ | Weekly review seed | 2h | Done | — |
+| P0 | Install rrule package | 0.5h | TODO | None |
+| P0 | RRULE parser service | 3h | TODO | rrule |
+| P0 | Scheduler worker | 4h | TODO | RRULE parser |
+| P0 | Template executor | 3h | TODO | Scheduler |
+| P1 | Skip/dismiss API | 2h | TODO | API |
+| P1 | Email service (Nodemailer) | 3h | TODO | SMTP |
+| P1 | TemplateBuilder UI | 6h | TODO | React |
+| P1 | RRulePicker component | 4h | TODO | UI |
+
+**Deliverables**:
+- `apps/worker/src/modules/scheduler/scheduler.module.ts`
+- `apps/worker/src/modules/scheduler/rrule.parser.ts`
+- `apps/worker/src/modules/scheduler/scheduler.worker.ts`
+- `apps/worker/src/modules/scheduler/template.executor.ts`
+- `apps/worker/src/modules/notifications/email.service.ts`
+- `apps/web/src/components/TemplateBuilder.tsx`
+- `apps/web/src/components/RRulePicker.tsx`
+
+### Phase 7: Analytics Dashboard & Charts (Days 39-50) 🟢 Medium
+**Objective**: Metrics visualization and weekly review dashboard.
+**Current Status**: 30% complete (API endpoints done, no worker or UI).
+
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| ✅ | Analytics service | 4h | Done | — |
+| ✅ | CFD endpoint | 3h | Done | — |
+| ✅ | Throughput endpoint | 2h | Done | — |
+| ✅ | Lead/cycle metrics endpoint | 2h | Done | — |
+| ✅ | Stale tasks endpoint | 2h | Done | — |
+| ✅ | WIP breaches endpoint | 2h | Done | — |
+| P0 | ColumnSnapshot schema model | 1h | TODO | Prisma |
+| P0 | TaskMetric schema model | 1h | TODO | Prisma |
+| P0 | Snapshot worker | 4h | TODO | Schema |
+| P0 | Metrics calculator | 4h | TODO | Schema |
+| P1 | Install recharts | 0.5h | TODO | None |
+| P1 | CFDChart component | 4h | TODO | recharts |
+| P1 | ThroughputChart component | 3h | TODO | recharts |
+| P1 | LeadCycleScatter component | 4h | TODO | recharts |
+| P0 | ReviewDashboard page | 6h | TODO | Charts |
+| P2 | AgingWipBadge component | 2h | TODO | UI |
+
+**Deliverables**:
+- `prisma/schema.prisma` (add ColumnSnapshot, TaskMetric models)
+- `apps/worker/src/modules/analytics/analytics.module.ts`
+- `apps/worker/src/modules/analytics/snapshot.worker.ts`
+- `apps/worker/src/modules/analytics/metrics.calculator.ts`
+- `apps/web/src/components/charts/CFDChart.tsx`
+- `apps/web/src/components/charts/ThroughputChart.tsx`
+- `apps/web/src/components/charts/LeadCycleScatter.tsx`
+- `apps/web/src/pages/ReviewDashboard.tsx`
+- `apps/web/src/components/AgingWipBadge.tsx`
+
+### Phase 8: Testing & Quality (Days 51-60) 🟢 Medium
+**Objective**: Production-ready quality with comprehensive tests.
+**Current Status**: 5% complete (only 1 test file exists).
+
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| P0 | Test setup (Jest + Vitest) | 2h | TODO | None |
+| P0 | TaskService unit tests | 4h | TODO | Jest |
+| P0 | BoardService unit tests | 3h | TODO | Jest |
+| P0 | ClarificationService tests | 3h | TODO | Jest |
+| P0 | RuleService unit tests | 3h | TODO | Jest |
+| P0 | AnalyticsService tests | 3h | TODO | Jest |
+| P1 | Condition evaluator tests | 3h | TODO | Jest |
+| P1 | Action executor tests | 3h | TODO | Jest |
+| P1 | Testcontainers setup | 2h | TODO | Docker |
+| P1 | Board workflow integration tests | 4h | TODO | Testcontainers |
+| P1 | Rule execution integration tests | 4h | TODO | Testcontainers |
+| P2 | Playwright setup | 2h | TODO | None |
+| P2 | E2E capture-to-done flow | 4h | TODO | Playwright |
+| P2 | E2E clarification wizard | 3h | TODO | Playwright |
+| P2 | k6 load tests | 4h | TODO | k6 |
+
+**Deliverables**:
+- `apps/api/src/modules/tasks/__tests__/task.service.spec.ts`
+- `apps/api/src/modules/boards/__tests__/board.service.spec.ts`
+- `apps/api/src/modules/boards/__tests__/wip.service.spec.ts`
+- `apps/api/src/modules/clarification/__tests__/clarification.service.spec.ts`
+- `apps/api/src/modules/rules/__tests__/rule.service.spec.ts`
+- `apps/api/src/modules/analytics/__tests__/analytics.service.spec.ts`
+- `apps/worker/src/modules/rules/__tests__/evaluator.spec.ts`
+- `tests/integration/testcontainers.setup.ts`
+- `tests/integration/board-workflow.spec.ts`
+- `tests/integration/rule-execution.spec.ts`
+- `tests/e2e/playwright.config.ts`
+- `tests/e2e/capture-to-done.spec.ts`
+- `tests/e2e/clarification-wizard.spec.ts`
+- `tests/load/board.k6.js`
+
+### Phase 9: Observability & Hardening (Days 61-68) 🟢 Medium
+**Objective**: Production observability and operational tooling.
+
+| Priority | Task | Effort | Status | Dependencies |
+| --- | --- | --- | --- | --- |
+| P0 | Notification schema model | 1h | TODO | Prisma |
+| P1 | OpenTelemetry setup | 4h | TODO | None |
+| P1 | Prometheus metrics | 4h | TODO | prom-client |
+| P1 | Structured logging (Pino) | 3h | TODO | None |
+| P1 | Backup script | 3h | TODO | pg_dump |
+| P1 | Restore script | 2h | TODO | pg_restore |
+| P2 | PWA manifest | 1h | TODO | None |
+| P2 | Enhanced service worker | 4h | TODO | SW |
+| P2 | Security scan CI | 2h | TODO | GH Actions |
+| P2 | Health check dashboard | 3h | TODO | API |
+
+**Deliverables**:
+- `prisma/schema.prisma` (add Notification model)
+- `apps/api/src/telemetry/tracing.ts`
+- `apps/api/src/metrics/prometheus.module.ts`
+- `apps/api/src/metrics/custom.metrics.ts`
+- `apps/api/src/logging/logger.service.ts`
+- `scripts/backup.sh`
+- `scripts/restore.sh`
+- `apps/web/public/manifest.json`
+- `apps/web/public/sw.js` (enhanced)
+- `.github/workflows/security.yml`
+
+---
+
+### Effort Summary
+
+| Phase | Total Effort | Status |
+| --- | --- | --- |
+| Phase 1-2 | ~40h | ✅ Complete |
+| Phase 3: Security | ~25h | 🔴 40% done |
+| Phase 4: Clarification UI | ~36h | 🟡 50% done |
+| Phase 5: Automation Worker | ~55h | 🟡 25% done |
+| Phase 6: Scheduler | ~25h | 🟢 25% done |
+| Phase 7: Analytics UI | ~30h | 🟢 30% done |
+| Phase 8: Testing | ~45h | 🟢 5% done |
+| Phase 9: Observability | ~25h | 🟢 0% done |
+| **Total Remaining** | **~200h** | |
+
+### Recommended Execution Order
+
+1. **Phase 3: Security** - Critical for any deployment
+2. **Phase 5: Automation Worker** - Core differentiating feature
+3. **Phase 6: Scheduler** - Enables recurring templates
+4. **Phase 4: Clarification UI** - Completes GTD workflow
+5. **Phase 7: Analytics UI** - Enables weekly review
+6. **Phase 8: Testing** - Production readiness
+7. **Phase 9: Observability** - Production hardening
 
 ---
 
@@ -990,14 +1226,64 @@ model Notification {
 
 ---
 
-## 17. Conclusion
+## 17. Conclusion (Updated Gap Analysis)
 
-This implementation plan provides a comprehensive roadmap from the current state to full GTD + Kanban platform functionality. Key takeaways:
+This implementation plan provides a comprehensive roadmap from the current state to full GTD + Kanban platform functionality.
 
-1. **Foundation is solid**: Core data model, services, and capture mechanisms are implemented
-2. **Critical gaps**: Docker Compose, board UI, authentication, and automation engine are the highest priority
-3. **Phased approach**: 8 phases over ~60 days covers all major functionality
-4. **Testing investment**: Comprehensive testing strategy ensures production readiness
-5. **Clear specifications**: Each workstream now has detailed task breakdowns with file locations
+### Current Achievement Summary
 
-The priority execution roadmap (Section 12) should be used to guide sprint planning, with Phase 1-3 being essential for any production deployment.
+| Area | Progress | Key Accomplishments |
+| --- | --- | --- |
+| **Infrastructure** | 100% | Docker Compose, config, health checks, seed data |
+| **Core API** | 90% | All domain services, CRUD endpoints, WebSocket gateway |
+| **Board UI** | 100% | Kanban board with dnd-kit, filters, WIP indicators |
+| **Capture Pipeline** | 85% | Web capture, voice, offline queue, IMAP, extension |
+| **Security** | 40% | Rate limiting, capture token guard |
+| **GTD Flow** | 50% | Clarification API, checklist (no wizard UI) |
+| **Automation** | 25% | Rule API only (no worker) |
+| **Templates** | 25% | Template API only (no scheduler) |
+| **Analytics** | 30% | Analytics API only (no worker/charts) |
+| **Testing** | 5% | Minimal coverage |
+
+### Key Takeaways
+
+1. **Strong Foundation**: Phases 1-2 are complete with full infrastructure and a working Kanban UI
+2. **API-First Approach**: Most backend services are implemented, enabling parallel frontend work
+3. **Critical Gap**: Worker-side automation and scheduling are the largest missing pieces
+4. **Security Priority**: Authentication should be addressed before production deployment
+5. **~200 hours remaining**: Concentrated in worker services, frontend UIs, and testing
+
+### Recommended Next Steps
+
+| Priority | Phase | Rationale |
+| --- | --- | --- |
+| 🔴 Critical | Phase 3: Security | Required for production deployment |
+| 🔴 Critical | Phase 5: Automation Worker | Core differentiating feature, enables rule-based automation |
+| 🟡 High | Phase 6: Scheduler | Enables recurring templates and weekly review |
+| 🟡 High | Phase 4: Clarification UI | Completes the GTD workflow for end users |
+| 🟢 Medium | Phase 7: Analytics UI | Enables data-driven weekly reviews |
+| 🟢 Medium | Phase 8: Testing | Ensures production quality |
+| 🟢 Medium | Phase 9: Observability | Production monitoring and operations |
+
+### Files to Create/Modify Next
+
+**Highest Priority Files** (Phase 3 + 5):
+```
+# Security
+apps/api/src/modules/auth/password.service.ts
+apps/api/src/modules/auth/jwt.service.ts
+apps/api/src/modules/auth/strategies/local.strategy.ts
+apps/api/src/modules/auth/strategies/jwt.strategy.ts
+apps/api/src/guards/session.guard.ts
+apps/api/src/guards/jwt.guard.ts
+
+# Worker Automation
+prisma/schema.prisma (add RuleRun, Outbox, ColumnSnapshot, TaskMetric, Notification)
+apps/worker/src/modules/rules/rules.module.ts
+apps/worker/src/modules/rules/triggers/trigger.registry.ts
+apps/worker/src/modules/rules/conditions/evaluator.ts
+apps/worker/src/modules/rules/actions/action.registry.ts
+apps/worker/src/modules/rules/rule.processor.ts
+```
+
+The priority execution roadmap (Section 12) should be used to guide sprint planning, with **Phase 3 (Security) and Phase 5 (Automation Worker)** being the highest priorities for the next development cycle.
