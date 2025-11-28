@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Personal Kanban Capture Settings</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+        max-width: 480px;
+      }
+      label {
+        display: block;
+        margin-bottom: 1rem;
+      }
+      input {
+        width: 100%;
+        padding: 0.5rem;
+      }
+      button {
+        padding: 0.5rem 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Capture Settings</h1>
+    <form id="settings">
+      <label>
+        API Endpoint
+        <input name="endpoint" type="url" required />
+      </label>
+      <label>
+        Capture Token
+        <input name="token" type="text" />
+      </label>
+      <label>
+        Board ID
+        <input name="boardId" type="text" required />
+      </label>
+      <label>
+        Owner ID
+        <input name="ownerId" type="text" required />
+      </label>
+      <button type="submit">Save</button>
+    </form>
+    <script>
+      const form = document.getElementById('settings');
+      chrome.storage.sync.get(['endpoint', 'token', 'boardId', 'ownerId'], (data) => {
+        form.endpoint.value = data.endpoint || 'http://localhost:3000/api/v1/capture';
+        form.token.value = data.token || 'local-capture-token';
+        form.boardId.value = data.boardId || '';
+        form.ownerId.value = data.ownerId || '';
+      });
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const payload = Object.fromEntries(new FormData(form).entries());
+        chrome.storage.sync.set(payload, () => alert('Saved!'));
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ColumnType {
+  INPUT
+  CLARIFY
+  CONTEXT
+  WAITING
+  SOMEDAY
+  DONE
+  ARCHIVE
+}
+
+enum TaskContext {
+  EMAIL
+  MEETING
+  PHONE
+  READ
+  WATCH
+  DESK
+  OTHER
+}
+
+enum TaskEventType {
+  CREATED
+  UPDATED
+  MOVED
+  COMPLETED
+  STALE
+  RULE_TRIGGERED
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  email              String              @unique
+  name               String?
+  timezone           String?             @default("UTC")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  boards             Board[]
+  tasks              Task[]
+  projects           Project[]
+  rules              Rule[]
+  recurringTemplates RecurringTemplate[]
+}
+
+model Board {
+  id          String           @id @default(uuid()) @db.Uuid
+  ownerId     String           @db.Uuid
+  name        String
+  description String?
+  config      Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  owner       User             @relation(fields: [ownerId], references: [id])
+  columns     Column[]
+  projects    Project[]
+  tasks       Task[]
+  tags        Tag[]
+  rules       Rule[]
+  templates   RecurringTemplate[]
+  events      TaskEvent[]
+
+  @@index([ownerId])
+}
+
+model Column {
+  id        String     @id @default(uuid()) @db.Uuid
+  boardId   String     @db.Uuid
+  name      String
+  type      ColumnType @default(INPUT)
+  wipLimit  Int?
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  board     Board      @relation(fields: [boardId], references: [id])
+  tasks     Task[]
+
+  @@index([boardId])
+}
+
+model Project {
+  id             String   @id @default(uuid()) @db.Uuid
+  boardId        String   @db.Uuid
+  ownerId        String   @db.Uuid
+  name           String
+  description    String?
+  desiredOutcome String?
+  status         String?  @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  board          Board    @relation(fields: [boardId], references: [id])
+  owner          User     @relation(fields: [ownerId], references: [id])
+  tasks          Task[]
+
+  @@index([boardId])
+  @@index([ownerId])
+}
+
+model Task {
+  id              String        @id @default(uuid()) @db.Uuid
+  boardId         String        @db.Uuid
+  columnId        String        @db.Uuid
+  projectId       String?       @db.Uuid
+  ownerId         String        @db.Uuid
+  title           String
+  description     String?
+  context         TaskContext?
+  waitingFor      String?
+  dueAt           DateTime?
+  needsBreakdown  Boolean       @default(false)
+  metadata        Json?
+  isDone          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  completedAt     DateTime?
+  lastMovedAt     DateTime      @default(now())
+  stale           Boolean       @default(false)
+  board           Board         @relation(fields: [boardId], references: [id])
+  column          Column        @relation(fields: [columnId], references: [id])
+  project         Project?      @relation(fields: [projectId], references: [id])
+  owner           User          @relation(fields: [ownerId], references: [id])
+  tags            TaskTag[]
+  checklist       ChecklistItem[]
+  events          TaskEvent[]
+
+  @@index([boardId])
+  @@index([columnId])
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([stale])
+}
+
+model ChecklistItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid
+  title     String
+  isDone    Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id])
+
+  @@index([taskId])
+}
+
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  boardId   String   @db.Uuid
+  name      String
+  color     String?  @default("#94a3b8")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  board     Board    @relation(fields: [boardId], references: [id])
+  tasks     TaskTag[]
+
+  @@unique([boardId, name])
+}
+
+model TaskTag {
+  taskId String @db.Uuid
+  tagId  String @db.Uuid
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+}
+
+model TaskEvent {
+  id           String        @id @default(uuid()) @db.Uuid
+  taskId       String        @db.Uuid
+  boardId      String        @db.Uuid
+  type         TaskEventType
+  fromColumnId String?       @db.Uuid
+  toColumnId   String?       @db.Uuid
+  payload      Json?
+  triggeredBy  String?
+  createdAt    DateTime      @default(now())
+  task         Task          @relation(fields: [taskId], references: [id])
+  board        Board         @relation(fields: [boardId], references: [id])
+
+  @@index([boardId])
+  @@index([taskId])
+}
+
+model Rule {
+  id          String   @id @default(uuid()) @db.Uuid
+  boardId     String   @db.Uuid
+  ownerId     String   @db.Uuid
+  name        String
+  description String?
+  enabled     Boolean  @default(true)
+  priority    Int      @default(100)
+  trigger     Json
+  conditions  Json?
+  actions     Json
+  lastRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  board       Board    @relation(fields: [boardId], references: [id])
+  owner       User     @relation(fields: [ownerId], references: [id])
+
+  @@index([boardId])
+  @@index([ownerId])
+}
+
+model RecurringTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  boardId     String   @db.Uuid
+  ownerId     String   @db.Uuid
+  name        String
+  description String?
+  payload     Json
+  rrule       String
+  timezone    String   @default("UTC")
+  nextRunAt   DateTime?
+  lastRunAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  board       Board    @relation(fields: [boardId], references: [id])
+  owner       User     @relation(fields: [ownerId], references: [id])
+
+  @@index([boardId])
+  @@index([ownerId])
+}
