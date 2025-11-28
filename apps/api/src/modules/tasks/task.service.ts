@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TaskEventType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { CreateTaskInput } from './dto/create-task.input';
-import { UpdateTaskInput } from './dto/update-task.input';
+import { CreateTaskDto } from './dto/create-task.input';
+import { UpdateTaskDto } from './dto/update-task.input';
 
 @Injectable()
 export class TaskService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createTask(input: CreateTaskInput) {
+  async createTask(input: CreateTaskDto) {
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
@@ -57,8 +57,8 @@ export class TaskService {
     });
   }
 
-  async updateTask(input: UpdateTaskInput) {
-    const { id, tags, ...data } = input;
+  async updateTask(id: string, input: UpdateTaskDto) {
+    const { tags, ...data } = input;
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.update({
         where: { id },

@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
-import { CreateBoardInput } from './dto/create-board.input';
-import { UpdateBoardInput } from './dto/update-board.input';
+import { CreateBoardDto } from './dto/create-board.input';
+import { UpdateBoardDto } from './dto/update-board.input';
 
 @Injectable()
 export class BoardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  createBoard(input: CreateBoardInput) {
+  createBoard(input: CreateBoardDto) {
     return this.prisma.board.create({
       data: {
         ownerId: input.ownerId,
@@ -37,8 +37,8 @@ export class BoardService {
     });
   }
 
-  updateBoard(input: UpdateBoardInput) {
-    const { id, ...data } = input;
+  updateBoard(id: string, input: UpdateBoardDto) {
+    const data = input;
     return this.prisma.board.update({
       where: { id },
       data,

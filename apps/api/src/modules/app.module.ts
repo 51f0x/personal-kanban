@@ -4,10 +4,11 @@ import { ConfigModule } from '../shared/config.module';
 import { BoardModule } from './boards/board.module';
 import { DatabaseModule } from './database/database.module';
 import { ProjectModule } from './projects/project.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { TaskModule } from './tasks/task.module';
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, BoardModule, TaskModule, ProjectModule],
+  imports: [ConfigModule, DatabaseModule, BoardModule, TaskModule, ProjectModule, RealtimeModule],
   controllers: [HealthController],
   providers: [],
 })
