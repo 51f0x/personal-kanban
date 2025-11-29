@@ -10,3 +10,4 @@ coverage/
 .vscode/
 logs/
 *.log
+.pnpm-store/

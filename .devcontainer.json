@@ -1,0 +1,75 @@
+{
+    "image": "mcr.microsoft.com/devcontainers/javascript-node",
+    "workspaceFolder": "/workspaces/personal-kanban",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "lts",
+            "npm": true,
+            "yarn": true,
+            "pnpm": false
+        },
+        "ghcr.io/devcontainers/features/git:1": {}
+    },
+    "containerUser": "vscode",
+    "remoteUser": "vscode",
+    "updateContentCommand": "corepack enable && corepack prepare yarn@4.10.3 --activate",
+    "postCreateCommand": "sudo chown root:docker /var/run/docker.sock || true && sudo chmod 666 /var/run/docker.sock || true && yarn install",
+    "initializeCommand": "docker network create dev_network --driver bridge || true",
+    "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    ],
+    "runArgs": [
+        "--privileged"
+    ],
+    "forwardPorts": [
+        19000,
+        19001,
+        19002,
+        8081,
+        3000,
+        9090
+    ],
+    "portsAttributes": {
+        "3000": {
+            "label": "Web server",
+            "onAutoForward": "notify"
+        },
+        "9090": {
+            "label": "Local APIs",
+            "onAutoForward": "notify"
+        },
+        "5432": {
+            "label": "Postgres",
+            "onAutoForward": "notify"
+        },
+        "6379": {
+            "label": "Redis",
+            "onAutoForward": "notify"
+        },
+        "1025": {
+            "label": "Mailhog",
+            "onAutoForward": "notify"
+        },
+        "9000": {
+            "label": "Minio",
+            "onAutoForward": "notify"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.vscode-typescript-next",
+                "dbaeumer.vscode-eslint",
+                "biomejs.biome",
+                "expo.vscode-expo-tools",
+                "github.copilot"
+            ],
+            "settings": {
+                "typescript.tsserver.useSyntaxServer": "auto",
+                "typescript.tsdk": "/usr/local/share/.config/yarn/global/node_modules/typescript/lib",
+                "editor.formatOnSave": true
+            }
+        }
+    }
+}
