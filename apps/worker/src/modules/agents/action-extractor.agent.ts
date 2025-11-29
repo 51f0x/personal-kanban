@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Ollama } from 'ollama';
+import { BaseAgent } from './base-agent';
+import { parseAndValidateJson } from '../../shared/utils';
+import { actionExtractionResultSchema } from '../../shared/schemas/agent-schemas';
+import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface ActionItem {
   description: string;
@@ -25,16 +28,11 @@ export interface ActionExtractionResult {
  * Works only on provided content - no invention
  */
 @Injectable()
-export class ActionExtractorAgent {
-  private readonly logger = new Logger(ActionExtractorAgent.name);
-  private readonly ollama: Ollama;
-  private readonly model: string;
+export class ActionExtractorAgent extends BaseAgent {
   readonly agentId = 'action-extractor-agent';
 
-  constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
-    this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
-    this.ollama = new Ollama({ host: endpoint });
+  constructor(config: ConfigService) {
+    super(config, ActionExtractorAgent.name);
   }
 
   /**
@@ -45,16 +43,30 @@ export class ActionExtractorAgent {
     description?: string,
     contentSummary?: string,
   ): Promise<ActionExtractionResult> {
+    // Validate inputs
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      this.logError('Title validation failed', new Error(titleValidation.error || 'Invalid title'));
+      return {
+        agentId: this.agentId,
+        success: false,
+        confidence: 0,
+        error: titleValidation.error || 'Invalid title',
+      };
+    }
+
     if (!contentSummary && !description) {
       // If no substantial content, try to extract from title alone
       return {
         agentId: this.agentId,
         success: true,
         confidence: 0.3,
-        actions: [{
-          description: title,
-          priority: 'medium',
-        }],
+        actions: [
+          {
+            description: title,
+            priority: 'medium',
+          },
+        ],
         totalActions: 1,
         metadata: {
           extractedFrom: 'title-only',
@@ -62,35 +74,63 @@ export class ActionExtractorAgent {
       };
     }
 
+    if (description) {
+      const descValidation = validateDescription(description);
+      if (!descValidation.valid) {
+        this.logError(
+          'Description validation failed',
+          new Error(descValidation.error || 'Invalid description'),
+        );
+        return {
+          agentId: this.agentId,
+          success: false,
+          confidence: 0,
+          error: descValidation.error || 'Invalid description',
+        };
+      }
+    }
+
     try {
       await this.ensureModel();
 
       const prompt = this.buildExtractionPrompt(title, description, contentSummary);
 
-      this.logger.log(`Extracting actions from: ${title.substring(0, 50)}...`);
-
-      const response = await this.ollama.generate({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0.5,
-        },
+      this.logOperation('Extracting actions', {
+        title: title.substring(0, 50),
+        hasDescription: !!description,
+        hasContentSummary: !!contentSummary,
       });
+
+      const response = await this.callLlm(
+        () =>
+          this.ollama.generate({
+            model: this.model,
+            prompt,
+            stream: false,
+            format: 'json',
+            options: {
+              temperature: 0.5,
+            },
+          }),
+        'action extraction',
+      );
 
       const extractionText = response.response || '';
 
-      try {
-        const extraction = JSON.parse(extractionText) as {
-          actions?: ActionItem[];
-          totalActions?: number;
-        };
+      // Parse and validate JSON
+      const parseResult = parseAndValidateJson(
+        extractionText,
+        actionExtractionResultSchema,
+        this.logger,
+        'action extraction',
+      );
 
+      if (parseResult.success) {
+        const extraction = parseResult.data;
         const actions = extraction.actions || [];
         const totalActions = extraction.totalActions || actions.length;
 
-        this.logger.log(`Extracted ${totalActions} actions`);
+        this.logOperation('Actions extracted', { totalActions, actionsCount: actions.length });
 
         return {
           agentId: this.agentId,
@@ -102,75 +142,26 @@ export class ActionExtractorAgent {
             model: this.model,
           },
         };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse action extraction result as JSON');
-        
-        const jsonMatch = extractionText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         extractionText.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const extraction = JSON.parse(jsonMatch[1] || jsonMatch[0]) as {
-            actions?: ActionItem[];
-            totalActions?: number;
-          };
-          return {
-            agentId: this.agentId,
-            success: true,
-            confidence: 0.65,
-            actions: extraction.actions,
-            totalActions: extraction.totalActions || extraction.actions?.length,
-            metadata: {
-              model: this.model,
-              parseWarning: true,
-            },
-          };
-        }
-
+      } else {
+        this.logError('Failed to parse action extraction result', new Error(parseResult.error));
         return {
           agentId: this.agentId,
           success: false,
           confidence: 0,
-          error: 'Failed to parse action extraction result',
+          error: parseResult.error || 'Failed to parse action extraction result',
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error extracting actions: ${errorMessage}`);
-      
+      this.logError('Error extracting actions', error, { title: title.substring(0, 50) });
       return {
         agentId: this.agentId,
         success: false,
         confidence: 0,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  /**
-   * Ensure the model is available
-   */
-  private async ensureModel(): Promise<void> {
-    try {
-      const listResponse = await this.ollama.list();
-      const models = listResponse.models || [];
-      const modelExists = models.some((m: { name: string }) => m.name === this.model);
-
-      if (!modelExists) {
-        this.logger.log(`Pulling model ${this.model}...`);
-        try {
-          await this.ollama.pull({
-            model: this.model,
-            stream: false,
-          });
-          this.logger.log(`Model ${this.model} pulled successfully`);
-        } catch (pullError) {
-          this.logger.warn(`Failed to pull model ${this.model}:`, pullError);
-        }
-      }
-    } catch (error) {
-      this.logger.warn('Could not ensure model availability', error);
-    }
-  }
 
   /**
    * Build the action extraction prompt

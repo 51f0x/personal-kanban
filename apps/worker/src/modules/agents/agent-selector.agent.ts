@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Ollama } from 'ollama';
+import { BaseAgent } from './base-agent';
+import { parseAndValidateJson } from '../../shared/utils';
+import { agentSelectionResultSchema } from '../../shared/schemas/agent-schemas';
+import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 /**
  * Agent Selection Result
@@ -20,16 +23,11 @@ export interface AgentSelectionResult {
  * Uses AI to determine which agents are most relevant for processing a task
  */
 @Injectable()
-export class AgentSelectorAgent {
-  private readonly logger = new Logger(AgentSelectorAgent.name);
-  private readonly ollama: Ollama;
-  private readonly model: string;
+export class AgentSelectorAgent extends BaseAgent {
   readonly agentId = 'agent-selector-agent';
 
-  constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
-    this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
-    this.ollama = new Ollama({ host: endpoint });
+  constructor(config: ConfigService) {
+    super(config, AgentSelectorAgent.name);
   }
 
   /**
@@ -41,60 +39,78 @@ export class AgentSelectorAgent {
     hasUrl?: boolean,
     urlContentLength?: number,
   ): Promise<AgentSelectionResult> {
+    // Validate inputs
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      this.logError('Title validation failed', new Error(titleValidation.error || 'Invalid title'), {
+        title: title.substring(0, 50),
+      });
+      return this.getDefaultSelection(title, description, hasUrl, urlContentLength);
+    }
+
+    if (description) {
+      const descValidation = validateDescription(description);
+      if (!descValidation.valid) {
+        this.logError(
+          'Description validation failed',
+          new Error(descValidation.error || 'Invalid description'),
+        );
+        return this.getDefaultSelection(title, description, hasUrl, urlContentLength);
+      }
+    }
+
     try {
       await this.ensureModel();
 
       const prompt = this.buildSelectionPrompt(title, description, hasUrl, urlContentLength);
 
-      this.logger.log(`Selecting agents for task: ${title.substring(0, 50)}...`);
+      this.logOperation('Selecting agents', { title: title.substring(0, 50), hasUrl });
 
-      const response = await this.ollama.generate({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0.3, // Lower temperature for more consistent decisions
-        },
-      });
+      const response = await this.callLlm(
+        () =>
+          this.ollama.generate({
+            model: this.model,
+            prompt,
+            stream: false,
+            format: 'json',
+            options: {
+              temperature: 0.3, // Lower temperature for more consistent decisions
+            },
+          }),
+        'agent selection',
+      );
 
       const selectionText = response.response || '';
 
-      try {
-        const selection = JSON.parse(selectionText) as Partial<AgentSelectionResult> & {
-          confidence?: number;
-        };
+      // Parse and validate JSON
+      const parseResult = parseAndValidateJson(
+        selectionText,
+        agentSelectionResultSchema,
+        this.logger,
+        'agent selection',
+      );
 
-        // Validate and set defaults
-        const result: AgentSelectionResult = {
-          shouldUseWebContent: selection.shouldUseWebContent ?? hasUrl ?? false,
-          shouldUseSummarization:
-            selection.shouldUseSummarization ?? (hasUrl && (urlContentLength || 0) > 500) ?? false,
-          shouldUseTaskAnalysis: selection.shouldUseTaskAnalysis ?? true, // Always analyze tasks
-          shouldUseContextExtraction: selection.shouldUseContextExtraction ?? true, // Usually useful
-          shouldUseActionExtraction:
-            selection.shouldUseActionExtraction ?? this.shouldExtractActions(title, description),
-          reasoning: selection.reasoning || 'Default agent selection',
-          confidence: selection.confidence || 0.7,
-        };
+      if (parseResult.success) {
+        const result = parseResult.data;
 
-        this.logger.log(
-          `Agent selection: WebContent=${result.shouldUseWebContent}, ` +
-            `Summarization=${result.shouldUseSummarization}, ` +
-            `TaskAnalysis=${result.shouldUseTaskAnalysis}, ` +
-            `ContextExtraction=${result.shouldUseContextExtraction}, ` +
-            `ActionExtraction=${result.shouldUseActionExtraction} ` +
-            `(confidence: ${result.confidence})`,
-        );
+        this.logOperation('Agent selection completed', {
+          webContent: result.shouldUseWebContent,
+          summarization: result.shouldUseSummarization,
+          taskAnalysis: result.shouldUseTaskAnalysis,
+          contextExtraction: result.shouldUseContextExtraction,
+          actionExtraction: result.shouldUseActionExtraction,
+          confidence: result.confidence,
+        });
 
         return result;
-      } catch (parseError) {
-        this.logger.warn('Failed to parse agent selection response, using defaults', parseError);
+      } else {
+        this.logger.warn('Failed to parse agent selection response, using defaults', {
+          error: parseResult.error,
+        });
         return this.getDefaultSelection(title, description, hasUrl, urlContentLength);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error selecting agents: ${errorMessage}`);
+      this.logError('Error selecting agents', error, { title: title.substring(0, 50) });
       // Return sensible defaults on error
       return this.getDefaultSelection(title, description, hasUrl, urlContentLength);
     }
@@ -227,23 +243,5 @@ Return only valid JSON, no markdown formatting.`;
     return (hasMultipleSteps || (hasActionKeywords && isComplex)) ?? false;
   }
 
-  /**
-   * Ensure the LLM model is available
-   */
-  private async ensureModel(): Promise<void> {
-    try {
-      const models = await this.ollama.list();
-      const modelExists = models.models.some((m) => m.name === this.model);
-
-      if (!modelExists) {
-        this.logger.warn(`Model ${this.model} not found, attempting to pull...`);
-        await this.ollama.pull({ model: this.model });
-        this.logger.log(`Model ${this.model} pulled successfully`);
-      }
-    } catch (error) {
-      this.logger.warn(`Could not ensure model ${this.model} is available: ${error}`);
-      // Continue anyway - the model might still work
-    }
-  }
 }
 

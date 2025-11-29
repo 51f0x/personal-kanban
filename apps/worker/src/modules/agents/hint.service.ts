@@ -187,18 +187,34 @@ export class HintService {
         });
       }
 
-      // Create all hints in a transaction
+      // Create all hints in a transaction using batch insert
       let createdHintIds: string[] = [];
       if (hints.length > 0) {
-        // Create hints one by one to get their IDs
-        for (const hintData of hints) {
-          const hint = await this.prisma.hint.create({
-            data: hintData,
-          });
-          createdHintIds.push(hint.id);
-        }
+        // Use createMany for better performance, then fetch IDs if needed
+        await this.prisma.hint.createMany({
+          data: hints,
+          skipDuplicates: true,
+        });
 
-        this.logger.log(`Created ${hints.length} hints for task ${taskId}`);
+        // Fetch created hints to get their IDs (for auto-apply)
+        const createdHints = await this.prisma.hint.findMany({
+          where: {
+            taskId,
+            createdAt: {
+              gte: new Date(Date.now() - 5000), // Created in last 5 seconds
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: hints.length,
+        });
+
+        createdHintIds = createdHints.map((h) => h.id);
+
+        this.logger.log(`Created ${hints.length} hints for task ${taskId}`, {
+          taskId,
+          hintCount: hints.length,
+          hintTypes: [...new Set(hints.map((h) => h.hintType))],
+        });
 
         // Auto-apply hints with confidence >= 80%
         await this.autoApplyHighConfidenceHints(taskId, createdHintIds);

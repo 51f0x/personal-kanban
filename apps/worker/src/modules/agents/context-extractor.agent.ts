@@ -1,7 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Ollama } from 'ollama';
 import { TaskContext } from '@prisma/client';
+import { BaseAgent } from './base-agent';
+import { parseAndValidateJson } from '../../shared/utils';
+import { contextExtractionResultSchema } from '../../shared/schemas/agent-schemas';
+import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface ContextExtractionResult {
   agentId: string;
@@ -21,16 +24,11 @@ export interface ContextExtractionResult {
  * Works only on provided data
  */
 @Injectable()
-export class ContextExtractorAgent {
-  private readonly logger = new Logger(ContextExtractorAgent.name);
-  private readonly ollama: Ollama;
-  private readonly model: string;
+export class ContextExtractorAgent extends BaseAgent {
   readonly agentId = 'context-extractor-agent';
 
-  constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
-    this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
-    this.ollama = new Ollama({ host: endpoint });
+  constructor(config: ConfigService) {
+    super(config, ContextExtractorAgent.name);
   }
 
   /**
@@ -41,28 +39,71 @@ export class ContextExtractorAgent {
     description?: string,
     contentSummary?: string,
   ): Promise<ContextExtractionResult> {
+    // Validate inputs
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      this.logError('Title validation failed', new Error(titleValidation.error || 'Invalid title'));
+      return {
+        agentId: this.agentId,
+        success: false,
+        confidence: 0,
+        error: titleValidation.error || 'Invalid title',
+      };
+    }
+
+    if (description) {
+      const descValidation = validateDescription(description);
+      if (!descValidation.valid) {
+        this.logError(
+          'Description validation failed',
+          new Error(descValidation.error || 'Invalid description'),
+        );
+        return {
+          agentId: this.agentId,
+          success: false,
+          confidence: 0,
+          error: descValidation.error || 'Invalid description',
+        };
+      }
+    }
+
     try {
       await this.ensureModel();
 
       const prompt = this.buildExtractionPrompt(title, description, contentSummary);
 
-      this.logger.log(`Extracting context from: ${title.substring(0, 50)}...`);
-
-      const response = await this.ollama.generate({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0.4, // Lower temperature for more consistent extraction
-        },
+      this.logOperation('Extracting context', {
+        title: title.substring(0, 50),
+        hasDescription: !!description,
+        hasContentSummary: !!contentSummary,
       });
+
+      const response = await this.callLlm(
+        () =>
+          this.ollama.generate({
+            model: this.model,
+            prompt,
+            stream: false,
+            format: 'json',
+            options: {
+              temperature: 0.4, // Lower temperature for more consistent extraction
+            },
+          }),
+        'context extraction',
+      );
 
       const extractionText = response.response || '';
 
-      try {
-        const extraction = JSON.parse(extractionText) as Partial<ContextExtractionResult> & { confidence?: number };
+      // Parse and validate JSON
+      const parseResult = parseAndValidateJson(
+        extractionText,
+        contextExtractionResultSchema,
+        this.logger,
+        'context extraction',
+      );
 
+      if (parseResult.success) {
+        const extraction = parseResult.data;
         return {
           agentId: this.agentId,
           success: true,
@@ -73,71 +114,26 @@ export class ContextExtractorAgent {
             model: this.model,
           },
         };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse extraction result as JSON');
-        
-        const jsonMatch = extractionText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         extractionText.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const extraction = JSON.parse(jsonMatch[1] || jsonMatch[0]) as Partial<ContextExtractionResult> & { confidence?: number };
-          return {
-            agentId: this.agentId,
-            success: true,
-            confidence: extraction.confidence || 0.65,
-            ...extraction,
-            metadata: {
-              ...extraction.metadata,
-              model: this.model,
-            },
-          };
-        }
-
+      } else {
+        this.logError('Failed to parse extraction result', new Error(parseResult.error));
         return {
           agentId: this.agentId,
           success: false,
           confidence: 0,
-          error: 'Failed to parse extraction result',
+          error: parseResult.error || 'Failed to parse extraction result',
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error extracting context: ${errorMessage}`);
-      
+      this.logError('Error extracting context', error, { title: title.substring(0, 50) });
       return {
         agentId: this.agentId,
         success: false,
         confidence: 0,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  /**
-   * Ensure the model is available
-   */
-  private async ensureModel(): Promise<void> {
-    try {
-      const listResponse = await this.ollama.list();
-      const models = listResponse.models || [];
-      const modelExists = models.some((m: { name: string }) => m.name === this.model);
-
-      if (!modelExists) {
-        this.logger.log(`Pulling model ${this.model}...`);
-        try {
-          await this.ollama.pull({
-            model: this.model,
-            stream: false,
-          });
-          this.logger.log(`Model ${this.model} pulled successfully`);
-        } catch (pullError) {
-          this.logger.warn(`Failed to pull model ${this.model}:`, pullError);
-        }
-      }
-    } catch (error) {
-      this.logger.warn('Could not ensure model availability', error);
-    }
-  }
 
   /**
    * Build the context extraction prompt

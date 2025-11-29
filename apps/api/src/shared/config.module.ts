@@ -58,8 +58,17 @@ const configValidationSchema = Joi.object({
   S3_SECRET_KEY: Joi.string().allow('').default(''),
 
   // LLM (optional)
-  LLM_ENDPOINT: Joi.string().default('http://localhost:11434').description('Ollama endpoint URL'),
-  LLM_MODEL: Joi.string().default('llama3.2:1b').description('Ollama model to use'),
+  LLM_ENDPOINT: Joi.string()
+    .uri({ scheme: ['http', 'https'] })
+    .default('http://localhost:11434')
+    .description('Ollama endpoint URL'),
+  LLM_MODEL: Joi.string().default('granite4:1b').description('Ollama model to use'),
+  LLM_TIMEOUT_MS: Joi.number().integer().min(1000).max(300000).default(30000).description(
+    'LLM request timeout in milliseconds (1s-5min)',
+  ),
+  LLM_MAX_RETRIES: Joi.number().integer().min(0).max(5).default(2).description(
+    'Maximum retry attempts for LLM calls',
+  ),
 
   // Observability
   OTEL_EXPORTER_OTLP_ENDPOINT: Joi.string().allow('').default(''),

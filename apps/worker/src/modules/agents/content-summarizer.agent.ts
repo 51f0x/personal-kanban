@@ -1,6 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Ollama } from 'ollama';
+import * as Joi from 'joi';
+import { BaseAgent } from './base-agent';
+import { parseAndValidateJson } from '../../shared/utils';
+import { summarizationResultSchema } from '../../shared/schemas/agent-schemas';
+import { validateContentSize, INPUT_LIMITS } from '../../shared/utils/input-validator.util';
 
 export interface SummarizationResult {
   agentId: string;
@@ -20,16 +24,11 @@ export interface SummarizationResult {
  * Only works on actual downloaded content - no invention
  */
 @Injectable()
-export class ContentSummarizerAgent {
-  private readonly logger = new Logger(ContentSummarizerAgent.name);
-  private readonly ollama: Ollama;
-  private readonly model: string;
+export class ContentSummarizerAgent extends BaseAgent {
   readonly agentId = 'content-summarizer-agent';
 
-  constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
-    this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
-    this.ollama = new Ollama({ host: endpoint });
+  constructor(config: ConfigService) {
+    super(config, ContentSummarizerAgent.name);
   }
 
   /**
@@ -48,138 +47,123 @@ export class ContentSummarizerAgent {
       };
     }
 
+    // Validate content size
+    const validation = validateContentSize(content);
+    if (!validation.valid) {
+      this.logError('Content validation failed', new Error(validation.error || 'Invalid content'));
+      return {
+        agentId: this.agentId,
+        success: false,
+        confidence: 0,
+        error: validation.error || 'Content validation failed',
+        originalLength: content.length,
+        summary: '',
+      };
+    }
+
     try {
-      // Ensure the model is available
       await this.ensureModel();
 
       const originalLength = content.length;
-      
-      // Truncate content if too long (keep first part which usually has most important info)
-      const contentToSummarize = content.length > 50000 
-        ? content.substring(0, 50000) + '\n\n[Content truncated for summarization]'
-        : content;
+
+      // Truncate content if too long using base class method
+      const contentToSummarize = this.validateAndTruncateContent(
+        content,
+        INPUT_LIMITS.CONTENT_MAX_LENGTH,
+      );
 
       const prompt = this.buildSummarizationPrompt(contentToSummarize, maxLength);
 
-      this.logger.log(`Summarizing content (${originalLength} chars, target: ${maxLength} words)`);
-
-      const response = await this.ollama.generate({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0.3, // Lower temperature for factual summarization
-        },
+      this.logOperation('Summarizing content', {
+        originalLength,
+        targetWords: maxLength,
+        truncated: content.length !== contentToSummarize.length,
       });
+
+      const response = await this.callLlm(
+        () =>
+          this.ollama.generate({
+            model: this.model,
+            prompt,
+            stream: false,
+            format: 'json',
+            options: {
+              temperature: 0.3, // Lower temperature for factual summarization
+            },
+          }),
+        'content summarization',
+      );
 
       const summaryText = response.response || '';
 
-      // Parse the JSON response
-      try {
-        const parsed = JSON.parse(summaryText) as {
-          summary: string;
-          keyPoints?: string[];
-        };
+      // Parse and validate JSON
+      const summarySchema = summarizationResultSchema.keys({
+        originalLength: Joi.number().integer().min(0).required(),
+        summary: Joi.string().required(),
+        keyPoints: Joi.array().items(Joi.string().max(200)).max(10).optional(),
+        wordCount: Joi.number().integer().min(0).optional(),
+      });
 
-        const summary = parsed.summary || '';
-        const keyPoints = parsed.keyPoints || [];
-        const wordCount = summary.split(/\s+/).length;
+      const parseResult = parseAndValidateJson(
+        summaryText,
+        summarySchema,
+        this.logger,
+        'content summarization',
+      );
 
-        this.logger.log(`Summarized to ${wordCount} words with ${keyPoints.length} key points`);
+      if (parseResult.success) {
+        const parsed = parseResult.data;
+        const wordCount = parsed.wordCount || parsed.summary.split(/\s+/).length;
+
+        this.logOperation('Content summarized', {
+          wordCount,
+          keyPointsCount: parsed.keyPoints?.length || 0,
+          compressionRatio: originalLength > 0 ? parsed.summary.length / originalLength : 0,
+        });
 
         return {
           agentId: this.agentId,
           success: true,
-          confidence: summary.length > 0 ? 0.85 : 0.5,
+          confidence: parsed.summary.length > 0 ? 0.85 : 0.5,
           originalLength,
-          summary,
-          keyPoints: keyPoints.length > 0 ? keyPoints : undefined,
+          summary: parsed.summary,
+          keyPoints: parsed.keyPoints && parsed.keyPoints.length > 0 ? parsed.keyPoints : undefined,
           wordCount,
           metadata: {
-            compressionRatio: originalLength > 0 ? (summary.length / originalLength) : 0,
+            compressionRatio: originalLength > 0 ? parsed.summary.length / originalLength : 0,
             model: this.model,
           },
         };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse LLM response as JSON, trying to extract text');
-        
-        // Try to extract summary from markdown or plain text
-        const jsonMatch = summaryText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         summaryText.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]) as {
-            summary: string;
-            keyPoints?: string[];
-          };
-          return {
-            agentId: this.agentId,
-            success: true,
-            confidence: 0.7,
-            originalLength,
-            summary: parsed.summary || summaryText,
-            keyPoints: parsed.keyPoints,
-            wordCount: (parsed.summary || summaryText).split(/\s+/).length,
-            metadata: {
-              model: this.model,
-              parseWarning: 'Required JSON extraction',
-            },
-          };
-        }
-
+      } else {
         // Fallback: use the raw response as summary
+        this.logger.warn('JSON validation failed, using raw response as summary', {
+          error: parseResult.error,
+        });
+        const fallbackSummary = summaryText.trim();
         return {
           agentId: this.agentId,
           success: true,
           confidence: 0.6,
           originalLength,
-          summary: summaryText.trim(),
-          wordCount: summaryText.trim().split(/\s+/).length,
+          summary: fallbackSummary,
+          wordCount: fallbackSummary.split(/\s+/).length,
           metadata: {
             model: this.model,
             fallback: true,
+            validationError: parseResult.error,
           },
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error summarizing content: ${errorMessage}`);
-      
+      this.logError('Error summarizing content', error, { contentLength: content.length });
       return {
         agentId: this.agentId,
         success: false,
         confidence: 0,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
         originalLength: content.length,
         summary: '',
       };
-    }
-  }
-
-  /**
-   * Ensure the model is available
-   */
-  private async ensureModel(): Promise<void> {
-    try {
-      const listResponse = await this.ollama.list();
-      const models = listResponse.models || [];
-      const modelExists = models.some((m: { name: string }) => m.name === this.model);
-
-      if (!modelExists) {
-        this.logger.log(`Pulling model ${this.model}...`);
-        try {
-          await this.ollama.pull({
-            model: this.model,
-            stream: false,
-          });
-          this.logger.log(`Model ${this.model} pulled successfully`);
-        } catch (pullError) {
-          this.logger.warn(`Failed to pull model ${this.model}:`, pullError);
-        }
-      }
-    } catch (error) {
-      this.logger.warn('Could not ensure model availability', error);
     }
   }
 

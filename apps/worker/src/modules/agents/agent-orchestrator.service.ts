@@ -339,8 +339,21 @@ export class AgentOrchestrator {
         agentNames.push('actionExtraction');
       }
 
-      // Run selected agents in parallel (always 3 promises, but some may resolve to undefined)
-      const results = await Promise.all(agentPromises);
+      // Run selected agents in parallel with timeout protection
+      // Use Promise.allSettled for better error isolation
+      const results = await Promise.allSettled(agentPromises).then((settledResults) =>
+        settledResults.map((result) => {
+          if (result.status === 'fulfilled') {
+            return result.value;
+          } else {
+            const errorMessage =
+              result.reason instanceof Error ? result.reason.message : String(result.reason);
+            errors.push(`Agent execution failed: ${errorMessage}`);
+            this.logger.error('Agent promise rejected', result.reason);
+            return undefined;
+          }
+        }),
+      );
       
       // Map results to variables - results array always has 3 elements in order: taskAnalysis, contextExtraction, actionExtraction
       const taskAnalysis = results[0];

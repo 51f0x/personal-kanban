@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '@prisma/client';
 import { Ollama } from 'ollama';
+import * as Joi from 'joi';
+import { parseAndValidateJson } from '../../shared/utils/json-parser.util';
+import { withTimeout } from '../../shared/utils/timeout.util';
+import { retryWithBackoff } from '../../shared/utils/retry.util';
 
 export interface TaskAnalysisResult {
   context?: TaskContext;
@@ -14,15 +18,34 @@ export interface TaskAnalysisResult {
   confidence: number;
 }
 
+// Schema for task analysis result
+const taskAnalysisResultSchema = Joi.object({
+  context: Joi.string()
+    .valid('EMAIL', 'MEETING', 'PHONE', 'READ', 'WATCH', 'DESK', 'OTHER')
+    .allow(null)
+    .optional(),
+  waitingFor: Joi.string().allow(null).optional(),
+  dueAt: Joi.string().isoDate().allow(null).optional(),
+  needsBreakdown: Joi.boolean().optional(),
+  suggestedTags: Joi.array().items(Joi.string().max(50)).max(20).optional(),
+  priority: Joi.string().valid('low', 'medium', 'high').allow(null).optional(),
+  estimatedDuration: Joi.string().allow(null).optional(),
+  confidence: Joi.number().min(0).max(1).default(0.7),
+});
+
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
   private readonly ollama: Ollama;
   private readonly model: string;
+  private readonly llmTimeoutMs: number;
+  private readonly maxRetries: number;
 
   constructor(private readonly config: ConfigService) {
     const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
     this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
+    this.llmTimeoutMs = this.config.get<number>('LLM_TIMEOUT_MS', 30000);
+    this.maxRetries = this.config.get<number>('LLM_MAX_RETRIES', 2);
     this.ollama = new Ollama({ host: endpoint });
   }
 
@@ -31,43 +54,57 @@ export class LlmService {
    */
   async analyzeTask(title: string, description?: string): Promise<TaskAnalysisResult | null> {
     try {
-      // Ensure the model is available
       await this.ensureModel();
 
       const prompt = this.buildAnalysisPrompt(title, description);
 
-      const response = await this.ollama.generate({
+      this.logger.log('Analyzing task with LLM', {
+        title: title.substring(0, 50),
+        hasDescription: !!description,
         model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
       });
+
+      const response = await retryWithBackoff(
+        () =>
+          withTimeout(
+            this.ollama.generate({
+              model: this.model,
+              prompt,
+              stream: false,
+              format: 'json',
+            }),
+            this.llmTimeoutMs,
+            `LLM call timed out after ${this.llmTimeoutMs}ms`,
+          ),
+        {
+          maxAttempts: this.maxRetries + 1,
+          initialDelayMs: 1000,
+          maxDelayMs: 5000,
+        },
+        this.logger,
+      );
 
       const analysisText = response.response || '';
 
-      // Parse the JSON response
-      try {
-        const analysis = JSON.parse(analysisText) as TaskAnalysisResult;
-        return {
-          ...analysis,
-          confidence: analysis.confidence || 0.7,
-        };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse LLM response as JSON', analysisText);
-        // Try to extract JSON from the response if it's wrapped in markdown
-        const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         analysisText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const analysis = JSON.parse(jsonMatch[1] || jsonMatch[0]) as TaskAnalysisResult;
-          return {
-            ...analysis,
-            confidence: analysis.confidence || 0.7,
-          };
-        }
+      // Parse and validate JSON
+      const parseResult = parseAndValidateJson(
+        analysisText,
+        taskAnalysisResultSchema,
+        this.logger,
+        'task analysis',
+      );
+
+      if (parseResult.success) {
+        return parseResult.data;
+      } else {
+        this.logger.warn('Failed to parse LLM response', { error: parseResult.error });
         return null;
       }
     } catch (error) {
-      this.logger.error('Error calling LLM service', error);
+      this.logger.error('Error calling LLM service', error instanceof Error ? error.stack : undefined, {
+        error: error instanceof Error ? error.message : String(error),
+        title: title.substring(0, 50),
+      });
       return null;
     }
   }
@@ -77,24 +114,35 @@ export class LlmService {
    */
   private async ensureModel(): Promise<void> {
     try {
-      const listResponse = await this.ollama.list();
+      const listResponse = await withTimeout(
+        this.ollama.list(),
+        this.llmTimeoutMs,
+        'Model list check timed out',
+      );
       const models = listResponse.models || [];
       const modelExists = models.some((m) => m.name === this.model);
 
       if (!modelExists) {
         this.logger.log(`Pulling model ${this.model}...`);
         try {
-          await this.ollama.pull({
-            model: this.model,
-            stream: false,
-          });
+          await withTimeout(
+            this.ollama.pull({
+              model: this.model,
+              stream: false,
+            }),
+            this.llmTimeoutMs * 2, // Longer timeout for model pull
+            `Model pull timed out after ${this.llmTimeoutMs * 2}ms`,
+          );
           this.logger.log(`Model ${this.model} pulled successfully`);
         } catch (pullError) {
-          this.logger.warn(`Failed to pull model ${this.model}:`, pullError);
+          const errorMessage =
+            pullError instanceof Error ? pullError.message : String(pullError);
+          this.logger.warn(`Failed to pull model ${this.model}: ${errorMessage}`);
         }
       }
     } catch (error) {
-      this.logger.warn('Could not ensure model availability', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not ensure model availability: ${errorMessage}`);
       // Continue anyway - the model might already be available
     }
   }

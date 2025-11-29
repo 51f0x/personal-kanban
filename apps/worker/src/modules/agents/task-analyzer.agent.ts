@@ -1,7 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Ollama } from 'ollama';
 import { TaskContext } from '@prisma/client';
+import { BaseAgent } from './base-agent';
+import { parseAndValidateJson } from '../../shared/utils';
+import { taskAnalysisResultSchema } from '../../shared/schemas/agent-schemas';
+import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface TaskAnalysisResult {
   agentId: string;
@@ -26,16 +29,11 @@ export interface TaskAnalysisResult {
  * Enhanced to work with summarized content and actual task data
  */
 @Injectable()
-export class TaskAnalyzerAgent {
-  private readonly logger = new Logger(TaskAnalyzerAgent.name);
-  private readonly ollama: Ollama;
-  private readonly model: string;
+export class TaskAnalyzerAgent extends BaseAgent {
   readonly agentId = 'task-analyzer-agent';
 
-  constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('LLM_ENDPOINT', 'http://localhost:11434');
-    this.model = this.config.get<string>('LLM_MODEL', 'granite4:1b');
-    this.ollama = new Ollama({ host: endpoint });
+  constructor(config: ConfigService) {
+    super(config, TaskAnalyzerAgent.name);
   }
 
   /**
@@ -47,28 +45,71 @@ export class TaskAnalyzerAgent {
     description?: string,
     contentSummary?: string,
   ): Promise<TaskAnalysisResult> {
+    // Validate inputs
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      this.logError('Title validation failed', new Error(titleValidation.error || 'Invalid title'));
+      return {
+        agentId: this.agentId,
+        success: false,
+        confidence: 0,
+        error: titleValidation.error || 'Invalid title',
+      };
+    }
+
+    if (description) {
+      const descValidation = validateDescription(description);
+      if (!descValidation.valid) {
+        this.logError(
+          'Description validation failed',
+          new Error(descValidation.error || 'Invalid description'),
+        );
+        return {
+          agentId: this.agentId,
+          success: false,
+          confidence: 0,
+          error: descValidation.error || 'Invalid description',
+        };
+      }
+    }
+
     try {
       await this.ensureModel();
 
       const prompt = this.buildAnalysisPrompt(title, description, contentSummary);
 
-      this.logger.log(`Analyzing task: ${title.substring(0, 50)}...`);
-
-      const response = await this.ollama.generate({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-        options: {
-          temperature: 0.5, // Moderate temperature for balanced analysis
-        },
+      this.logOperation('Analyzing task', {
+        title: title.substring(0, 50),
+        hasDescription: !!description,
+        hasContentSummary: !!contentSummary,
       });
+
+      const response = await this.callLlm(
+        () =>
+          this.ollama.generate({
+            model: this.model,
+            prompt,
+            stream: false,
+            format: 'json',
+            options: {
+              temperature: 0.5, // Moderate temperature for balanced analysis
+            },
+          }),
+        'task analysis',
+      );
 
       const analysisText = response.response || '';
 
-      try {
-        const analysis = JSON.parse(analysisText) as Partial<TaskAnalysisResult> & { confidence?: number };
+      // Parse and validate JSON
+      const parseResult = parseAndValidateJson(
+        analysisText,
+        taskAnalysisResultSchema,
+        this.logger,
+        'task analysis',
+      );
 
+      if (parseResult.success) {
+        const analysis = parseResult.data;
         return {
           agentId: this.agentId,
           success: true,
@@ -80,75 +121,31 @@ export class TaskAnalyzerAgent {
             hasContentSummary: !!contentSummary,
           },
         };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse LLM response as JSON');
-        
-        const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                         analysisText.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const analysis = JSON.parse(jsonMatch[1] || jsonMatch[0]) as Partial<TaskAnalysisResult> & { confidence?: number };
-          return {
-            agentId: this.agentId,
-            success: true,
-            confidence: analysis.confidence || 0.65,
-            ...analysis,
-            metadata: {
-              ...analysis.metadata,
-              model: this.model,
-              parseWarning: 'Required JSON extraction',
-            },
-          };
-        }
-
+      } else {
+        this.logError('Failed to parse analysis result', new Error(parseResult.error), {
+          rawResponse: analysisText.substring(0, 200),
+        });
         return {
           agentId: this.agentId,
           success: false,
           confidence: 0,
-          error: 'Failed to parse analysis result',
+          error: parseResult.error || 'Failed to parse analysis result',
           metadata: {
             rawResponse: analysisText.substring(0, 200),
           },
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error analyzing task: ${errorMessage}`);
-      
+      this.logError('Error analyzing task', error, { title: title.substring(0, 50) });
       return {
         agentId: this.agentId,
         success: false,
         confidence: 0,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  /**
-   * Ensure the model is available
-   */
-  private async ensureModel(): Promise<void> {
-    try {
-      const listResponse = await this.ollama.list();
-      const models = listResponse.models || [];
-      const modelExists = models.some((m: { name: string }) => m.name === this.model);
-
-      if (!modelExists) {
-        this.logger.log(`Pulling model ${this.model}...`);
-        try {
-          await this.ollama.pull({
-            model: this.model,
-            stream: false,
-          });
-          this.logger.log(`Model ${this.model} pulled successfully`);
-        } catch (pullError) {
-          this.logger.warn(`Failed to pull model ${this.model}:`, pullError);
-        }
-      }
-    } catch (error) {
-      this.logger.warn('Could not ensure model availability', error);
-    }
-  }
 
   /**
    * Build the analysis prompt
