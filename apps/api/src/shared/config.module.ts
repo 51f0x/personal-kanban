@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
+import { resolve } from 'path';
 
 const configValidationSchema = Joi.object({
   // Environment
@@ -62,11 +63,20 @@ const configValidationSchema = Joi.object({
   LOG_FORMAT: Joi.string().valid('json', 'pretty').default('pretty'),
 });
 
+// Resolve root .env paths (works from apps/api directory)
+const rootEnvPath = resolve(process.cwd(), '../../.env');
+const rootEnvLocalPath = resolve(process.cwd(), '../../.env.local');
+
 @Module({
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: [
+        '.env.local',
+        '.env',
+        rootEnvLocalPath,
+        rootEnvPath,
+      ],
       validationSchema: configValidationSchema,
       validationOptions: {
         abortEarly: false,

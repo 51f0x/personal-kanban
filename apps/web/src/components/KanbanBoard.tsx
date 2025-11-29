@@ -11,10 +11,11 @@ import {
   useSensors,
   closestCorners,
 } from '@dnd-kit/core';
-import { Board, Task } from '../api/types';
+import { Board, Task, Project } from '../api/types';
 import { useTasks } from '../hooks/useTasks';
 import { useBoardRealtime } from '../hooks/useBoardRealtime';
 import { KanbanColumn } from './KanbanColumn';
+import { KanbanSwimlane } from './KanbanSwimlane';
 import { TaskCard } from './TaskCard';
 import { FilterBar, Filters } from './FilterBar';
 
@@ -28,6 +29,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [wipWarning, setWipWarning] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'swimlanes' | 'columns'>('swimlanes');
 
   const [filters, setFilters] = useState<Filters>({
     context: null,
@@ -102,7 +104,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
     });
   }, [tasks, filters, board.columns]);
 
-  // Group tasks by column
+  // Group tasks by column (for column view)
   const tasksByColumn = useMemo(() => {
     const grouped: Record<string, Task[]> = {};
     for (const column of board.columns) {
@@ -121,6 +123,43 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
     }
     return grouped;
   }, [filteredTasks, board.columns]);
+
+  // Group tasks by swimlane (project) and column (for swimlane view)
+  const tasksBySwimlane = useMemo(() => {
+    const projects = board.projects || [];
+    const hasUnassigned = filteredTasks.some((t) => !t.projectId);
+    const swimlanes: Array<Project | { id: 'unassigned'; name: string }> = [
+      ...projects,
+      ...(hasUnassigned ? [{ id: 'unassigned' as const, name: 'Unassigned' }] : []),
+    ];
+
+    const grouped: Record<string, Record<string, Task[]>> = {};
+    
+    for (const swimlane of swimlanes) {
+      grouped[swimlane.id] = {};
+      for (const column of board.columns) {
+        grouped[swimlane.id][column.id] = [];
+      }
+    }
+
+    for (const task of filteredTasks) {
+      const swimlaneId = task.projectId || 'unassigned';
+      if (grouped[swimlaneId] && grouped[swimlaneId][task.columnId]) {
+        grouped[swimlaneId][task.columnId].push(task);
+      }
+    }
+
+    // Sort tasks within each column by lastMovedAt
+    for (const swimlaneId of Object.keys(grouped)) {
+      for (const columnId of Object.keys(grouped[swimlaneId])) {
+        grouped[swimlaneId][columnId].sort(
+          (a, b) => new Date(a.lastMovedAt).getTime() - new Date(b.lastMovedAt).getTime()
+        );
+      }
+    }
+
+    return grouped;
+  }, [filteredTasks, board.columns, board.projects]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const task = tasks.find((t) => t.id === event.active.id);
@@ -202,8 +241,16 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
     [board.columns]
   );
 
-  // Get projects for filter
+  // Get projects for filter and swimlanes
   const projects = board.projects || [];
+  const swimlanes = useMemo(() => {
+    const projectSwimlanes = projects || [];
+    const hasUnassigned = filteredTasks.some((t) => !t.projectId);
+    return [
+      ...projectSwimlanes,
+      ...(hasUnassigned ? [{ id: 'unassigned', name: 'Unassigned' }] : []),
+    ];
+  }, [projects, filteredTasks]);
 
   // Calculate summary stats
   const stats = useMemo(() => {
@@ -246,6 +293,23 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
 
       <FilterBar filters={filters} onFiltersChange={setFilters} projects={projects} />
 
+      <div className="view-mode-toggle">
+        <button
+          type="button"
+          className={`view-mode-btn ${viewMode === 'swimlanes' ? 'active' : ''}`}
+          onClick={() => setViewMode('swimlanes')}
+        >
+          🏊 Swimlanes
+        </button>
+        <button
+          type="button"
+          className={`view-mode-btn ${viewMode === 'columns' ? 'active' : ''}`}
+          onClick={() => setViewMode('columns')}
+        >
+          📊 Columns
+        </button>
+      </div>
+
       {error && <div className="banner error">{error}</div>}
       {wipWarning && <div className="banner warning">{wipWarning}</div>}
       {loading && <div className="banner">Loading tasks...</div>}
@@ -258,16 +322,35 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="kanban-columns">
-          {sortedColumns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              column={column}
-              tasks={tasksByColumn[column.id] || []}
-              isOver={overColumnId === column.id}
-            />
-          ))}
-        </div>
+        {viewMode === 'swimlanes' ? (
+          <div className="kanban-swimlanes">
+            {swimlanes.map((swimlane) => (
+              <KanbanSwimlane
+                key={swimlane.id}
+                swimlane={swimlane}
+                columns={sortedColumns}
+                tasksByColumn={tasksBySwimlane[swimlane.id] || {}}
+                overColumnId={overColumnId}
+              />
+            ))}
+            {swimlanes.length === 0 && (
+              <div className="empty-swimlanes">
+                <p>No projects found. Create a project to organize tasks in swimlanes.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="kanban-columns">
+            {sortedColumns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                tasks={tasksByColumn[column.id] || []}
+                isOver={overColumnId === column.id}
+              />
+            ))}
+          </div>
+        )}
 
         <DragOverlay>
           {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
