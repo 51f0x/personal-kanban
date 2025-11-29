@@ -45,6 +45,19 @@ services:
       timeout: 20s
       retries: 3
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   api:
     build:
       context: .
@@ -54,11 +67,15 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban
       REDIS_URL: redis://redis:6379
+      LLM_ENDPOINT: http://ollama:11434
+      LLM_MODEL: llama3.2:1b
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      ollama:
+        condition: service_healthy
     ports:
       - "3000:3000"
 
@@ -88,3 +105,4 @@ services:
 volumes:
   pg_data:
   minio_data:
+  ollama_data:

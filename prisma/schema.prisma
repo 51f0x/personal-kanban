@@ -51,14 +51,14 @@ model User {
 }
 
 model Board {
-  id          String           @id @default(uuid()) @db.Uuid
-  ownerId     String           @db.Uuid
+  id          String              @id @default(uuid()) @db.Uuid
+  ownerId     String              @db.Uuid
   name        String
   description String?
   config      Json?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  owner       User             @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  owner       User                @relation(fields: [ownerId], references: [id])
   columns     Column[]
   projects    Project[]
   tasks       Task[]
@@ -103,31 +103,32 @@ model Project {
 }
 
 model Task {
-  id              String        @id @default(uuid()) @db.Uuid
-  boardId         String        @db.Uuid
-  columnId        String        @db.Uuid
-  projectId       String?       @db.Uuid
-  ownerId         String        @db.Uuid
-  title           String
-  description     String?
-  context         TaskContext?
-  waitingFor      String?
-  dueAt           DateTime?
-  needsBreakdown  Boolean       @default(false)
-  metadata        Json?
-  isDone          Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  completedAt     DateTime?
-  lastMovedAt     DateTime      @default(now())
-  stale           Boolean       @default(false)
-  board           Board         @relation(fields: [boardId], references: [id])
-  column          Column        @relation(fields: [columnId], references: [id])
-  project         Project?      @relation(fields: [projectId], references: [id])
-  owner           User          @relation(fields: [ownerId], references: [id])
-  tags            TaskTag[]
-  checklist       ChecklistItem[]
-  events          TaskEvent[]
+  id             String          @id @default(uuid()) @db.Uuid
+  boardId        String          @db.Uuid
+  columnId       String          @db.Uuid
+  projectId      String?         @db.Uuid
+  ownerId        String          @db.Uuid
+  title          String
+  description    String?
+  context        TaskContext?
+  waitingFor     String?
+  dueAt          DateTime?
+  needsBreakdown Boolean         @default(false)
+  metadata       Json?
+  isDone         Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  completedAt    DateTime?
+  lastMovedAt    DateTime        @default(now())
+  stale          Boolean         @default(false)
+  board          Board           @relation(fields: [boardId], references: [id])
+  column         Column          @relation(fields: [columnId], references: [id])
+  project        Project?        @relation(fields: [projectId], references: [id])
+  owner          User            @relation(fields: [ownerId], references: [id])
+  tags           TaskTag[]
+  checklist      ChecklistItem[]
+  events         TaskEvent[]
+  hints          Hint[]
 
   @@index([boardId])
   @@index([columnId])
@@ -150,13 +151,13 @@ model ChecklistItem {
 }
 
 model Tag {
-  id        String   @id @default(uuid()) @db.Uuid
-  boardId   String   @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  boardId   String    @db.Uuid
   name      String
-  color     String?  @default("#94a3b8")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  board     Board    @relation(fields: [boardId], references: [id])
+  color     String?   @default("#94a3b8")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  board     Board     @relation(fields: [boardId], references: [id])
   tasks     TaskTag[]
 
   @@unique([boardId, name])
@@ -189,43 +190,63 @@ model TaskEvent {
 }
 
 model Rule {
-  id          String   @id @default(uuid()) @db.Uuid
-  boardId     String   @db.Uuid
-  ownerId     String   @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  boardId     String    @db.Uuid
+  ownerId     String    @db.Uuid
   name        String
   description String?
-  enabled     Boolean  @default(true)
-  priority    Int      @default(100)
+  enabled     Boolean   @default(true)
+  priority    Int       @default(100)
   trigger     Json
   conditions  Json?
   actions     Json
   lastRunAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  board       Board    @relation(fields: [boardId], references: [id])
-  owner       User     @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  board       Board     @relation(fields: [boardId], references: [id])
+  owner       User      @relation(fields: [ownerId], references: [id])
 
   @@index([boardId])
   @@index([ownerId])
 }
 
 model RecurringTemplate {
-  id          String   @id @default(uuid()) @db.Uuid
-  boardId     String   @db.Uuid
-  ownerId     String   @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  boardId     String    @db.Uuid
+  ownerId     String    @db.Uuid
   name        String
   description String?
   payload     Json
   rrule       String
-  timezone    String   @default("UTC")
+  timezone    String    @default("UTC")
   nextRunAt   DateTime?
   lastRunAt   DateTime?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  board       Board    @relation(fields: [boardId], references: [id])
-  owner       User     @relation(fields: [ownerId], references: [id])
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  board       Board     @relation(fields: [boardId], references: [id])
+  owner       User      @relation(fields: [ownerId], references: [id])
 
   @@index([boardId])
   @@index([ownerId])
+}
+
+model Hint {
+  id         String   @id @default(uuid()) @db.Uuid
+  taskId     String   @db.Uuid
+  agentId    String // e.g., "web-content-agent", "task-analyzer-agent"
+  hintType   String // e.g., "title", "description", "context", "tags", "summary", "actions"
+  title      String? // Optional title/label for the hint
+  content    String? // Main content of the hint
+  data       Json? // Structured data (e.g., tags array, actions array)
+  confidence Float? // Confidence score 0-1
+  applied    Boolean  @default(false) // Whether user has applied this hint
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([agentId])
+  @@index([hintType])
+  @@index([applied])
 }

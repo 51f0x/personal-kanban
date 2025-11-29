@@ -1,10 +1,12 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, TaskContext } from '../api/types';
+import { getTaskDisplayValue } from '../utils/taskDisplay';
 
 interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
+  onClick?: () => void;
 }
 
 const contextColors: Record<TaskContext, string> = {
@@ -40,7 +42,7 @@ function formatRelativeTime(dateStr: string): string {
   return `${Math.floor(diffDays / 30)}mo ago`;
 }
 
-export function TaskCard({ task, isDragging }: TaskCardProps) {
+export function TaskCard({ task, isDragging, onClick }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -53,6 +55,15 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't trigger click if dragging or if clicking on interactive elements
+    if (isDragging || (e.target as HTMLElement).closest('button, a')) {
+      return;
+    }
+    e.stopPropagation();
+    onClick?.();
   };
 
   const isStale = task.stale || (() => {
@@ -69,29 +80,33 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
       }
     : null;
 
+  // Get display values: use task properties first, fall back to hints only if not set
+  const display = getTaskDisplayValue(task);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className={`task-card ${task.isDone ? 'done' : ''} ${isStale ? 'stale' : ''} ${task.needsBreakdown ? 'needs-breakdown' : ''}`}
+      onClick={handleClick}
+      className={`task-card ${task.isDone ? 'done' : ''} ${isStale ? 'stale' : ''} ${task.needsBreakdown ? 'needs-breakdown' : ''} ${onClick ? 'clickable' : ''}`}
     >
       <div className="task-header">
-        <span className="task-title">{task.title}</span>
-        {task.context && (
+        <span className="task-title">{display.title}</span>
+        {display.context && (
           <span
             className="task-context-badge"
-            style={{ backgroundColor: contextColors[task.context] }}
-            title={task.context}
+            style={{ backgroundColor: contextColors[display.context] }}
+            title={display.context}
           >
-            {contextIcons[task.context]}
+            {contextIcons[display.context]}
           </span>
         )}
       </div>
 
-      {task.description && (
-        <p className="task-description">{task.description.slice(0, 100)}{task.description.length > 100 ? '...' : ''}</p>
+      {display.description && (
+        <p className="task-description">{display.description.slice(0, 100)}{display.description.length > 100 ? '...' : ''}</p>
       )}
 
       <div className="task-meta">

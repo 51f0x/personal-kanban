@@ -7,16 +7,37 @@ interface KanbanColumnProps {
   column: Column;
   tasks: Task[];
   isOver?: boolean;
+  onTaskClick?: (taskId: string) => void;
 }
 
 const columnTypeColors: Record<ColumnType, string> = {
-  INPUT: '#f59e0b',
-  CLARIFY: '#3b82f6',
-  CONTEXT: '#22c55e',
-  WAITING: '#8b5cf6',
-  SOMEDAY: '#6b7280',
-  DONE: '#10b981',
-  ARCHIVE: '#374151',
+  INPUT: '#e9ecef', // Light grey for inbox
+  CLARIFY: '#fff3cd', // Light yellow
+  CONTEXT: '#fff3cd', // Light yellow
+  WAITING: '#fff3cd', // Light yellow
+  SOMEDAY: '#fff3cd', // Light yellow
+  DONE: '#d4edda', // Light green
+  ARCHIVE: '#d4edda', // Light green
+};
+
+const columnTypeBackgroundColors: Record<ColumnType, string> = {
+  INPUT: '#f8f9fa', // Light grey background
+  CLARIFY: '#fffef5', // Very light yellow background
+  CONTEXT: '#fffef5', // Very light yellow background
+  WAITING: '#fffef5', // Very light yellow background
+  SOMEDAY: '#fffef5', // Very light yellow background
+  DONE: '#f0f9f4', // Very light green background
+  ARCHIVE: '#f0f9f4', // Very light green background
+};
+
+const columnTypeAccentLines: Record<ColumnType, string | null> = {
+  INPUT: null,
+  CLARIFY: '#28a745', // Green line for "Preparation - immediate attention"
+  CONTEXT: null,
+  WAITING: '#28a745', // Green line
+  SOMEDAY: null,
+  DONE: '#dc3545', // Red line
+  ARCHIVE: '#dc3545', // Red line
 };
 
 const columnTypeIcons: Record<ColumnType, string> = {
@@ -29,7 +50,7 @@ const columnTypeIcons: Record<ColumnType, string> = {
   ARCHIVE: '📦',
 };
 
-export function KanbanColumn({ column, tasks, isOver }: KanbanColumnProps) {
+export function KanbanColumn({ column, tasks, isOver, onTaskClick }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.id,
   });
@@ -39,17 +60,28 @@ export function KanbanColumn({ column, tasks, isOver }: KanbanColumnProps) {
   const isAtLimit = wipLimit !== null && wipLimit !== undefined && taskCount >= wipLimit;
   const isOverLimit = wipLimit !== null && wipLimit !== undefined && taskCount > wipLimit;
 
-  const borderColor = columnTypeColors[column.type] || '#6b7280';
+  const borderColor = columnTypeColors[column.type] || '#e9ecef';
+  const backgroundColor = columnTypeBackgroundColors[column.type] || '#ffffff';
+  const accentLineColor = columnTypeAccentLines[column.type] || null;
 
   return (
     <div
       ref={setNodeRef}
       className={`kanban-column ${isOver ? 'drag-over' : ''} ${isAtLimit ? 'at-limit' : ''} ${isOverLimit ? 'over-limit' : ''}`}
-      style={{ '--column-color': borderColor } as React.CSSProperties}
+      style={{ 
+        '--column-color': borderColor,
+        '--column-bg': backgroundColor,
+        '--accent-line': accentLineColor,
+      } as React.CSSProperties}
     >
+      {accentLineColor && (
+        <div 
+          className="column-accent-line"
+          style={{ backgroundColor: accentLineColor }}
+        />
+      )}
       <div className="column-header">
         <div className="column-title">
-          <span className="column-icon">{columnTypeIcons[column.type]}</span>
           <span className="column-name">{column.name}</span>
         </div>
         <div className="column-stats">
@@ -77,7 +109,11 @@ export function KanbanColumn({ column, tasks, isOver }: KanbanColumnProps) {
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div className="column-tasks">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard 
+              key={task.id} 
+              task={task} 
+              onClick={onTaskClick ? () => onTaskClick(task.id) : undefined}
+            />
           ))}
           {tasks.length === 0 && (
             <div className="empty-column">

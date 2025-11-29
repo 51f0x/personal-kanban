@@ -8,6 +8,7 @@ interface KanbanSwimlaneProps {
   tasksByColumn: Record<string, Task[]>;
   isOver?: boolean;
   overColumnId?: string | null;
+  onTaskClick?: (taskId: string) => void;
 }
 
 export function KanbanSwimlane({
@@ -16,6 +17,7 @@ export function KanbanSwimlane({
   tasksByColumn,
   isOver,
   overColumnId,
+  onTaskClick,
 }: KanbanSwimlaneProps) {
   const { setNodeRef } = useDroppable({
     id: `swimlane-${swimlane.id}`,
@@ -37,9 +39,6 @@ export function KanbanSwimlane({
             <span className="swimlane-count">{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span>
           )}
         </div>
-        {!isUnassigned && 'description' in swimlane && swimlane.description && (
-          <p className="swimlane-description">{swimlane.description}</p>
-        )}
       </div>
 
       <div className="swimlane-columns">
@@ -49,6 +48,7 @@ export function KanbanSwimlane({
             column={column}
             tasks={tasksByColumn[column.id] || []}
             isOver={overColumnId === column.id}
+            onTaskClick={onTaskClick}
           />
         ))}
       </div>

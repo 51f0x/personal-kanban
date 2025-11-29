@@ -46,9 +46,17 @@ export async function deleteTask(taskId: string): Promise<void> {
   }
 }
 
+export async function fetchTaskById(taskId: string): Promise<Task> {
+  const response = await fetch(`${API_URL}/tasks/${taskId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch task (${response.status})`);
+  }
+  return response.json();
+}
+
 export async function updateTask(
   taskId: string,
-  updates: Partial<Pick<Task, 'title' | 'description' | 'context' | 'dueAt' | 'isDone'>>
+  updates: Partial<Pick<Task, 'title' | 'description' | 'context' | 'dueAt' | 'isDone' | 'waitingFor' | 'needsBreakdown' | 'projectId' | 'columnId'>>
 ): Promise<Task> {
   const response = await fetch(`${API_URL}/tasks/${taskId}`, {
     method: 'PATCH',

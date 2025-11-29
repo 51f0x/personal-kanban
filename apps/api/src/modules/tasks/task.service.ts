@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, TaskEventType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { BoardGateway } from '../realtime/board.gateway';
-import { WipService, WipStatus } from '../boards/wip.service';
+import { WipService } from '../boards/wip.service';
+import { LlmService } from '../llm/llm.service';
 import { CreateTaskDto } from './dto/create-task.input';
 import { UpdateTaskDto } from './dto/update-task.input';
 import { MoveTaskDto, MoveTaskResult } from './dto/move-task.input';
@@ -13,9 +14,56 @@ export class TaskService {
     private readonly prisma: PrismaService,
     private readonly boardGateway: BoardGateway,
     private readonly wipService: WipService,
+    private readonly llmService: LlmService,
   ) {}
 
   async createTask(input: CreateTaskDto) {
+    // Analyze task with LLM if title/description provided
+    let llmAnalysis = null;
+    if (input.title) {
+      try {
+        llmAnalysis = await this.llmService.analyzeTask(input.title, input.description);
+      } catch (error) {
+        // Log but don't fail task creation if LLM fails
+        // LLM analysis is optional, so we continue without it
+      }
+    }
+
+    // Merge LLM analysis with input, giving priority to explicit input values
+    const context = input.context ?? llmAnalysis?.context ?? null;
+    const waitingFor = input.waitingFor ?? llmAnalysis?.waitingFor ?? null;
+    
+    // Parse dueAt from LLM analysis, handling invalid dates gracefully
+    let dueAt = input.dueAt;
+    if (!dueAt && llmAnalysis?.dueAt) {
+      try {
+        const parsedDate = new Date(llmAnalysis.dueAt);
+        if (!isNaN(parsedDate.getTime())) {
+          dueAt = parsedDate;
+        }
+      } catch {
+        // Invalid date, ignore
+      }
+    }
+    
+    const needsBreakdown = input.needsBreakdown ?? llmAnalysis?.needsBreakdown ?? false;
+
+    // Build metadata object
+    const metadata: Record<string, unknown> = {
+      ...(input.metadata && typeof input.metadata === 'object' ? input.metadata : {}),
+      ...(llmAnalysis
+        ? {
+            llmAnalysis: {
+              priority: llmAnalysis.priority,
+              estimatedDuration: llmAnalysis.estimatedDuration,
+              suggestedTags: llmAnalysis.suggestedTags,
+              confidence: llmAnalysis.confidence,
+              analyzedAt: new Date().toISOString(),
+            },
+          }
+        : {}),
+    };
+
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
@@ -25,11 +73,11 @@ export class TaskService {
           projectId: input.projectId,
           title: input.title,
           description: input.description,
-          context: input.context,
-          waitingFor: input.waitingFor,
-          dueAt: input.dueAt,
-          needsBreakdown: input.needsBreakdown ?? false,
-          metadata: input.metadata ?? Prisma.JsonNull,
+          context,
+          waitingFor,
+          dueAt,
+          needsBreakdown,
+          metadata: Object.keys(metadata).length > 0 ? (metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
         },
       });
 
@@ -121,6 +169,13 @@ export class TaskService {
       include: {
         checklist: { orderBy: { position: 'asc' } },
         tags: { include: { tag: true } },
+        hints: {
+          orderBy: [
+            { applied: 'asc' }, // Unapplied hints first
+            { confidence: 'desc' }, // Higher confidence first
+            { createdAt: 'desc' }, // Newer first
+          ],
+        },
       },
     });
   }
@@ -132,6 +187,13 @@ export class TaskService {
         column: true,
         project: true,
         tags: { include: { tag: true } },
+        hints: {
+          orderBy: [
+            { applied: 'asc' }, // Unapplied hints first
+            { confidence: 'desc' }, // Higher confidence first
+            { createdAt: 'desc' }, // Newer first
+          ],
+        },
       },
       orderBy: [{ lastMovedAt: 'asc' }],
     });
@@ -310,7 +372,7 @@ export class TaskService {
   }
 
   /**
-   * Delete a task
+   * Delete a task and all related records
    */
   async deleteTask(id: string) {
     const task = await this.prisma.task.findUnique({
@@ -322,7 +384,24 @@ export class TaskService {
       throw new NotFoundException(`Task not found: ${id}`);
     }
 
-    await this.prisma.task.delete({ where: { id } });
+    // Delete task and all related records in a transaction
+    // TaskTag has onDelete: Cascade, but TaskEvent and ChecklistItem don't
+    await this.prisma.$transaction(async (tx) => {
+      // Delete TaskEvents first
+      await tx.taskEvent.deleteMany({
+        where: { taskId: id },
+      });
+
+      // Delete ChecklistItems
+      await tx.checklistItem.deleteMany({
+        where: { taskId: id },
+      });
+
+      // Delete the task itself (TaskTag will be deleted by cascade)
+      await tx.task.delete({
+        where: { id },
+      });
+    });
 
     this.boardGateway.emitBoardUpdate(task.boardId, {
       type: 'task.deleted',

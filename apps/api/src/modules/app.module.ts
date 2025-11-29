@@ -14,6 +14,8 @@ import { RuleModule } from './rules/rule.module';
 import { TagModule } from './tags/tag.module';
 import { TaskModule } from './tasks/task.module';
 import { TemplateModule } from './templates/template.module';
+import { LlmModule } from './llm/llm.module';
+import { AgentsModule } from './agents/agents.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { TemplateModule } from './templates/template.module';
     ClarificationModule,
     RealtimeModule,
     CaptureModule,
+    LlmModule,
+    AgentsModule,
   ],
   controllers: [HealthController],
   providers: [],

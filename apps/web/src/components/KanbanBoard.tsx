@@ -18,6 +18,7 @@ import { KanbanColumn } from './KanbanColumn';
 import { KanbanSwimlane } from './KanbanSwimlane';
 import { TaskCard } from './TaskCard';
 import { FilterBar, Filters } from './FilterBar';
+import { TaskDetailModal } from './TaskDetailModal';
 
 interface KanbanBoardProps {
   board: Board;
@@ -27,9 +28,10 @@ interface KanbanBoardProps {
 export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
   const { tasks, loading, error, moveTask, refresh } = useTasks(board.id);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [wipWarning, setWipWarning] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'swimlanes' | 'columns'>('swimlanes');
+  const [viewMode, setViewMode] = useState<'swimlanes' | 'columns'>('columns');
 
   const [filters, setFilters] = useState<Filters>({
     context: null,
@@ -113,6 +115,10 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
     for (const task of filteredTasks) {
       if (grouped[task.columnId]) {
         grouped[task.columnId].push(task);
+      } else {
+        // Task has a columnId that doesn't match any column on the board
+        // This shouldn't happen but we'll log it for debugging
+        console.warn(`Task ${task.id} has columnId ${task.columnId} that doesn't exist on board. Task will not be displayed.`);
       }
     }
     // Sort tasks within each column by lastMovedAt
@@ -134,7 +140,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
     ];
 
     const grouped: Record<string, Record<string, Task[]>> = {};
-    
+
     for (const swimlane of swimlanes) {
       grouped[swimlane.id] = {};
       for (const column of board.columns) {
@@ -213,7 +219,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
 
     try {
       const result = await moveTask(taskId, targetColumnId);
-      
+
       if (!result.success && result.wipStatus) {
         setWipWarning(
           `WIP limit reached for "${result.wipStatus.columnName}" (${result.wipStatus.currentCount}/${result.wipStatus.wipLimit}). Force move?`
@@ -242,12 +248,11 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
   );
 
   // Get projects for filter and swimlanes
-  const projects = board.projects || [];
+  const projects = useMemo(() => board.projects || [], [board.projects]);
   const swimlanes = useMemo(() => {
-    const projectSwimlanes = projects || [];
     const hasUnassigned = filteredTasks.some((t) => !t.projectId);
     return [
-      ...projectSwimlanes,
+      ...projects,
       ...(hasUnassigned ? [{ id: 'unassigned', name: 'Unassigned' }] : []),
     ];
   }, [projects, filteredTasks]);
@@ -331,6 +336,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
                 columns={sortedColumns}
                 tasksByColumn={tasksBySwimlane[swimlane.id] || {}}
                 overColumnId={overColumnId}
+                onTaskClick={setSelectedTaskId}
               />
             ))}
             {swimlanes.length === 0 && (
@@ -347,6 +353,7 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
                 column={column}
                 tasks={tasksByColumn[column.id] || []}
                 isOver={overColumnId === column.id}
+                onTaskClick={setSelectedTaskId}
               />
             ))}
           </div>
@@ -356,6 +363,18 @@ export function KanbanBoard({ board, onBack }: KanbanBoardProps) {
           {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
         </DragOverlay>
       </DndContext>
+
+      {selectedTaskId && (
+        <TaskDetailModal
+          taskId={selectedTaskId}
+          board={board}
+          onClose={() => setSelectedTaskId(null)}
+          onUpdate={() => {
+            refresh();
+            setSelectedTaskId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

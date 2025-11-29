@@ -10,3 +10,11 @@ export async function fetchBoards(ownerId: string): Promise<Board[]> {
   }
   return response.json();
 }
+
+export async function fetchBoardById(boardId: string): Promise<Board> {
+  const response = await fetch(`${API_URL}/boards/${boardId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch board (${response.status})`);
+  }
+  return response.json();
+}

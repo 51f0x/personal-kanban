@@ -1,12 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { TaskService } from '../tasks/task.service';
 import { CaptureRequestDto } from './dto/capture-request.dto';
 import { parseCaptureText } from '@personal-kanban/shared';
+import { AgentCaptureService } from './agent-capture.service';
 
 @Injectable()
 export class CaptureService {
-  constructor(private readonly prisma: PrismaService, private readonly taskService: TaskService) {}
+  private readonly logger = new Logger(CaptureService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly taskService: TaskService,
+    private readonly agentCaptureService: AgentCaptureService,
+  ) {}
 
   async quickAdd(dto: CaptureRequestDto) {
     const board = await this.prisma.board.findUnique({
@@ -40,6 +47,12 @@ export class CaptureService {
         extra: dto.metadata ?? undefined,
       },
       needsBreakdown: true,
+    });
+
+    // Trigger agent processing with WebSocket callbacks (runs in background)
+    // This will show progress to users in real-time
+    this.agentCaptureService.processTaskWithAgentsAsync(task.id, board.id).catch((error) => {
+      this.logger.error(`Failed to start agent processing for task ${task.id}: ${error}`);
     });
 
     return task;

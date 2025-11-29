@@ -22,6 +22,7 @@ const rootEnvLocalPath = resolve(process.cwd(), '../../.env.local');
         NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
         DATABASE_URL: Joi.string().uri().required(),
         REDIS_URL: Joi.string().uri().required(),
+        API_URL: Joi.string().uri().default('http://localhost:3000'),
       }),
       validationOptions: {
         abortEarly: false,

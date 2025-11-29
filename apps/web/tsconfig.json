@@ -6,7 +6,9 @@
     "baseUrl": "./",
     "paths": {
       "@shared/*": ["../packages/shared/src/*"]
-    }
+    },
+    // Type checking only - Vite handles the build
+    "noEmit": true
   },
   "include": ["src", "vite.config.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]

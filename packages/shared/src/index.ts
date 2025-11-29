@@ -152,7 +152,8 @@ export type BoardUpdateType =
   | 'task.deleted'
   | 'task.clarified'
   | 'wip.breach'
-  | 'rule.triggered';
+  | 'rule.triggered'
+  | 'agent.progress';
 
 export interface BoardUpdateEvent {
   type: BoardUpdateType;

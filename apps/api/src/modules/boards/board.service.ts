@@ -23,7 +23,10 @@ export class BoardService {
     return this.prisma.board.findMany({
       where: { ownerId },
       orderBy: { createdAt: 'asc' },
-      include: { columns: true, projects: true },
+      include: {
+        columns: { orderBy: { position: 'asc' } },
+        projects: true,
+      },
     });
   }
 

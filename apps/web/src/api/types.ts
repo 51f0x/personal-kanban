@@ -29,6 +29,20 @@ export interface ChecklistItem {
   position: number;
 }
 
+export interface Hint {
+  id: string;
+  taskId: string;
+  agentId: string;
+  hintType: string;
+  title?: string | null;
+  content?: string | null;
+  data?: Record<string, unknown> | null;
+  confidence?: number | null;
+  applied: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   boardId: string;
@@ -52,6 +66,7 @@ export interface Task {
   project?: Project | null;
   tags?: Array<{ tag: Tag }>;
   checklist?: ChecklistItem[];
+  hints?: Hint[];
 }
 
 export interface Board {

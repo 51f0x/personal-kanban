@@ -57,6 +57,10 @@ const configValidationSchema = Joi.object({
   S3_ACCESS_KEY: Joi.string().allow('').default(''),
   S3_SECRET_KEY: Joi.string().allow('').default(''),
 
+  // LLM (optional)
+  LLM_ENDPOINT: Joi.string().default('http://localhost:11434').description('Ollama endpoint URL'),
+  LLM_MODEL: Joi.string().default('llama3.2:1b').description('Ollama model to use'),
+
   // Observability
   OTEL_EXPORTER_OTLP_ENDPOINT: Joi.string().allow('').default(''),
   LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').default('info'),
