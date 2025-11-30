@@ -1,4 +1,4 @@
-import { Task, TaskContext, Hint } from '../api/types';
+import { Task, TaskContext, Hint } from '../services/types';
 
 /**
  * Helper to resolve display values from task properties first,

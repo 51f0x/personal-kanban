@@ -5,11 +5,23 @@
     "jsx": "react-jsx",
     "baseUrl": "./",
     "paths": {
-      "@shared/*": ["../packages/shared/src/*"]
+      "@shared/*": [
+        "../packages/shared/src/*"
+      ],
+      "@/*": [
+        "src/*"
+      ]
     },
     // Type checking only - Vite handles the build
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src",
+    "vite.config.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

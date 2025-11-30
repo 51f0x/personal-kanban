@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchBoards } from '../api/boards';
-import type { Board } from '../api/types';
+import { fetchBoards } from '../services/boards';
+import type { Board } from '../services/types';
 
 export function useBoards(ownerId?: string) {
   const [boards, setBoards] = useState<Board[]>([]);

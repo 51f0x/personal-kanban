@@ -10,6 +10,7 @@ import { ContentSummarizerAgent } from './content-summarizer.agent';
 import { TaskAnalyzerAgent } from './task-analyzer.agent';
 import { ContextExtractorAgent } from './context-extractor.agent';
 import { ActionExtractorAgent } from './action-extractor.agent';
+import { ToMarkdownAgent } from './to-markdown.agent';
 import { TaskProcessorService } from './task-processor.service';
 import { HintService } from './hint.service';
 import { AgentJobProcessor } from './agent-job.processor';
@@ -42,6 +43,7 @@ import { AgentJobProcessor } from './agent-job.processor';
     TaskAnalyzerAgent,
     ContextExtractorAgent,
     ActionExtractorAgent,
+    ToMarkdownAgent,
     TaskProcessorService,
     HintService,
     AgentJobProcessor,

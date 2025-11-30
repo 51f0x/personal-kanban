@@ -1,11 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import type {
-  WebContentResult,
-  SummarizationResult,
-  TaskAnalysisResult,
-  ContextExtractionResult,
-  ActionExtractionResult,
   AgentProcessingResult,
 } from './types';
 
@@ -184,6 +179,22 @@ export class HintService {
             totalActions: results.actionExtraction.totalActions,
           },
           confidence: results.actionExtraction.confidence,
+        });
+      }
+
+      // Create hint from markdown format result
+      if (results.markdownFormat?.success && results.markdownFormat.formattedDescription) {
+        hints.push({
+          taskId,
+          agentId: 'to-markdown-agent',
+          hintType: 'description',
+          title: 'Formatted Description (Markdown)',
+          content: results.markdownFormat.formattedDescription,
+          data: {
+            originalLength: results.markdownFormat.originalLength,
+            formattedLength: results.markdownFormat.formattedLength,
+          },
+          confidence: results.markdownFormat.confidence,
         });
       }
 

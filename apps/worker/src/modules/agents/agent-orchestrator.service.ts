@@ -5,6 +5,7 @@ import { ContentSummarizerAgent } from './content-summarizer.agent';
 import { TaskAnalyzerAgent } from './task-analyzer.agent';
 import { ContextExtractorAgent } from './context-extractor.agent';
 import { ActionExtractorAgent } from './action-extractor.agent';
+import { ToMarkdownAgent } from './to-markdown.agent';
 import { AgentSelectorAgent } from './agent-selector.agent';
 import { HintService } from './hint.service';
 import type {
@@ -16,6 +17,7 @@ import type {
   TaskAnalysisResult,
   ContextExtractionResult,
   ActionExtractionResult,
+  MarkdownFormatResult,
 } from './types';
 
 /**
@@ -36,6 +38,7 @@ export class AgentOrchestrator {
     private readonly taskAnalyzerAgent: TaskAnalyzerAgent,
     private readonly contextExtractorAgent: ContextExtractorAgent,
     private readonly actionExtractorAgent: ActionExtractorAgent,
+    private readonly toMarkdownAgent: ToMarkdownAgent,
     private readonly agentSelectorAgent: AgentSelectorAgent,
     private readonly hintService: HintService,
   ) {}
@@ -360,6 +363,50 @@ export class AgentOrchestrator {
       const contextExtraction = results[1];
       const actionExtraction = results[2];
 
+      // Step 5: Format description to markdown as the last action
+      let markdownFormat: MarkdownFormatResult | undefined;
+      
+      // Use the current task description (which may have been enhanced by other agents)
+      const finalDescription = enhancedDescription || task.description || undefined;
+      
+      if (finalDescription && finalDescription.trim().length > 0) {
+        await emitProgress('formatting-markdown', 95, 'Formatting description to markdown...');
+        
+        try {
+          markdownFormat = await this.toMarkdownAgent.formatToMarkdown(
+            task.title,
+            finalDescription,
+          );
+          
+          if (markdownFormat.success) {
+            await emitProgress('formatting-markdown', 98, 'Description formatted to markdown', {
+              agentId: 'to-markdown-agent',
+              confidence: markdownFormat.confidence,
+              originalLength: markdownFormat.originalLength,
+              formattedLength: markdownFormat.formattedLength,
+            });
+            this.logger.log(`Formatted description to markdown (${markdownFormat.originalLength} → ${markdownFormat.formattedLength} chars)`);
+          } else {
+            errors.push(`Markdown formatting failed: ${markdownFormat.error}`);
+            await emitProgress('error', 95, `Markdown formatting failed: ${markdownFormat.error}`, {
+              agentId: 'to-markdown-agent',
+              error: markdownFormat.error,
+            });
+            this.logger.warn(`Failed to format description to markdown: ${markdownFormat.error}`);
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          errors.push(`Markdown formatting failed: ${errorMessage}`);
+          await emitProgress('error', 95, `Markdown formatting failed: ${errorMessage}`, {
+            agentId: 'to-markdown-agent',
+            error: errorMessage,
+          });
+          this.logger.error(`Error formatting description to markdown: ${errorMessage}`);
+        }
+      } else {
+        this.logger.log('Skipping markdown formatting - no description to format');
+      }
+
       const processingTimeMs = Date.now() - startTime;
 
       const successfulAgents = Object.values({
@@ -368,6 +415,7 @@ export class AgentOrchestrator {
         taskAnalysis,
         contextExtraction,
         actionExtraction,
+        markdownFormat,
       }).filter((v) => v && typeof v === 'object' && 'success' in v && v.success).length;
 
       await emitProgress('completed', 100, 'Agent processing completed', {
@@ -393,6 +441,7 @@ export class AgentOrchestrator {
         taskAnalysis,
         contextExtraction,
         actionExtraction,
+        markdownFormat,
         processingTimeMs,
         errors: errors.length > 0 ? errors : undefined,
         progress: progressHistory,
@@ -497,12 +546,17 @@ export class AgentOrchestrator {
       }
 
       // Update description if suggested
+      // Priority: formatted markdown > suggested description > summary
       if (options?.updateDescription) {
+        const formattedMarkdown = results.markdownFormat?.formattedDescription;
         const suggestedDesc = results.taskAnalysis?.suggestedDescription;
         const summary = results.summarization?.summary;
         const currentDesc = task.description || '';
         
-        if (suggestedDesc || summary) {
+        // Use formatted markdown if available (highest priority)
+        if (formattedMarkdown && results.markdownFormat?.success) {
+          updates.description = formattedMarkdown;
+        } else if (suggestedDesc || summary) {
           const parts = [
             currentDesc,
             suggestedDesc,

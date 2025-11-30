@@ -1,4 +1,4 @@
-import { CapturePayload, sendCapture } from '../api/capture';
+import { CapturePayload, sendCapture } from '../services/capture';
 
 const STORAGE_KEY = 'pk_pending_captures_v1';
 

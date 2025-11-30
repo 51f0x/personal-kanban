@@ -12,7 +12,27 @@ const baseAgentResultSchema = Joi.object({
 });
 
 /**
- * Task analysis result schema
+ * Task analysis LLM response schema (what the LLM returns)
+ * Does not include agentId and success - those are added by the agent
+ */
+export const taskAnalysisResponseSchema = Joi.object({
+  suggestedTitle: Joi.string().max(500).optional(),
+  suggestedDescription: Joi.string().max(10000).allow(null).optional(),
+  context: Joi.string()
+    .valid('EMAIL', 'MEETING', 'PHONE', 'READ', 'WATCH', 'DESK', 'OTHER')
+    .allow(null)
+    .optional(),
+  waitingFor: Joi.string().allow(null).optional(),
+  dueAt: Joi.string().isoDate().allow(null).optional(),
+  needsBreakdown: Joi.boolean().optional(),
+  suggestedTags: Joi.array().items(Joi.string().max(50)).max(20).optional(),
+  priority: Joi.string().valid('low', 'medium', 'high').allow(null).optional(),
+  estimatedDuration: Joi.string().allow(null).optional(),
+  confidence: Joi.number().min(0).max(1).optional(),
+});
+
+/**
+ * Task analysis result schema (full agent result with agentId and success)
  */
 export const taskAnalysisResultSchema = baseAgentResultSchema.keys({
   context: Joi.string()
@@ -30,7 +50,22 @@ export const taskAnalysisResultSchema = baseAgentResultSchema.keys({
 });
 
 /**
- * Context extraction result schema
+ * Context extraction LLM response schema (what the LLM returns)
+ * Does not include agentId and success - those are added by the agent
+ */
+export const contextExtractionResponseSchema = Joi.object({
+  context: Joi.string()
+    .valid('EMAIL', 'MEETING', 'PHONE', 'READ', 'WATCH', 'DESK', 'OTHER')
+    .allow(null)
+    .optional(),
+  tags: Joi.array().items(Joi.string().max(50)).max(20).optional(),
+  projectHints: Joi.array().items(Joi.string().max(100)).max(10).optional(),
+  estimatedDuration: Joi.string().allow(null).optional(),
+  confidence: Joi.number().min(0).max(1).optional(),
+});
+
+/**
+ * Context extraction result schema (full agent result with agentId and success)
  */
 export const contextExtractionResultSchema = baseAgentResultSchema.keys({
   context: Joi.string()
@@ -52,7 +87,16 @@ const actionItemSchema = Joi.object({
 });
 
 /**
- * Action extraction result schema
+ * Action extraction LLM response schema (what the LLM returns)
+ * Does not include agentId and success - those are added by the agent
+ */
+export const actionExtractionResponseSchema = Joi.object({
+  actions: Joi.array().items(actionItemSchema).max(50).optional(),
+  totalActions: Joi.number().integer().min(0).optional(),
+});
+
+/**
+ * Action extraction result schema (full agent result with agentId and success)
  */
 export const actionExtractionResultSchema = baseAgentResultSchema.keys({
   actions: Joi.array().items(actionItemSchema).max(50).optional(),
@@ -60,7 +104,16 @@ export const actionExtractionResultSchema = baseAgentResultSchema.keys({
 });
 
 /**
- * Summarization result schema
+ * Summarization LLM response schema (what the LLM returns)
+ * Does not include agentId and success - those are added by the agent
+ */
+export const summarizationResponseSchema = Joi.object({
+  summary: Joi.string().required(),
+  keyPoints: Joi.array().items(Joi.string().max(200)).max(10).optional(),
+});
+
+/**
+ * Summarization result schema (full agent result with agentId and success)
  */
 export const summarizationResultSchema = baseAgentResultSchema.keys({
   originalLength: Joi.number().integer().min(0).required(),

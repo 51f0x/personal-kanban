@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchUsers, registerUser, type RegisterUserPayload, type User } from '../api/users';
+import { fetchUsers, registerUser, type RegisterUserPayload, type User } from '../services/users';
 
 const DEFAULT_OWNER_ID = import.meta.env.VITE_OWNER_ID ?? '';
 

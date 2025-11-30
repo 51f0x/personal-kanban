@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '../../shared/utils';
-import { actionExtractionResultSchema } from '../../shared/schemas/agent-schemas';
+import { actionExtractionResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface ActionItem {
@@ -117,10 +117,10 @@ export class ActionExtractorAgent extends BaseAgent {
 
       const extractionText = response.response || '';
 
-      // Parse and validate JSON
+      // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
         extractionText,
-        actionExtractionResultSchema,
+        actionExtractionResponseSchema,
         this.logger,
         'action extraction',
       );

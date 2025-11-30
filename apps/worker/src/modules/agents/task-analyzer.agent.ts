@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '@prisma/client';
 import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '../../shared/utils';
-import { taskAnalysisResultSchema } from '../../shared/schemas/agent-schemas';
+import { taskAnalysisResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface TaskAnalysisResult {
@@ -100,10 +100,10 @@ export class TaskAnalyzerAgent extends BaseAgent {
 
       const analysisText = response.response || '';
 
-      // Parse and validate JSON
+      // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
         analysisText,
-        taskAnalysisResultSchema,
+        taskAnalysisResponseSchema,
         this.logger,
         'task analysis',
       );

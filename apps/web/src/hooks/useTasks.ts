@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Task } from '../api/types';
-import { fetchTasks, moveTask as moveTaskApi, deleteTask as deleteTaskApi } from '../api/tasks';
+import { Task } from '../services/types';
+import { fetchTasks, moveTask as moveTaskApi, deleteTask as deleteTaskApi } from '../services/tasks';
 
 export function useTasks(boardId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([]);

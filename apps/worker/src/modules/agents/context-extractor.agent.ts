@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '@prisma/client';
 import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '../../shared/utils';
-import { contextExtractionResultSchema } from '../../shared/schemas/agent-schemas';
+import { contextExtractionResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
 
 export interface ContextExtractionResult {
@@ -94,10 +94,10 @@ export class ContextExtractorAgent extends BaseAgent {
 
       const extractionText = response.response || '';
 
-      // Parse and validate JSON
+      // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
         extractionText,
-        contextExtractionResultSchema,
+        contextExtractionResponseSchema,
         this.logger,
         'context extraction',
       );

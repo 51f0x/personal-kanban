@@ -70,6 +70,15 @@ export interface ActionExtractionResult extends AgentResult {
 }
 
 /**
+ * Markdown format result
+ */
+export interface MarkdownFormatResult extends AgentResult {
+  formattedDescription: string;
+  originalLength: number;
+  formattedLength: number;
+}
+
+/**
  * Agent processing progress stage
  */
 export type AgentProcessingStage =
@@ -81,6 +90,7 @@ export type AgentProcessingStage =
   | 'analyzing-task'
   | 'extracting-context'
   | 'extracting-actions'
+  | 'formatting-markdown'
   | 'applying-results'
   | 'completed'
   | 'error';
@@ -121,6 +131,7 @@ export interface AgentProcessingResult {
   taskAnalysis?: TaskAnalysisResult;
   contextExtraction?: ContextExtractionResult;
   actionExtraction?: ActionExtractionResult;
+  markdownFormat?: MarkdownFormatResult;
   processingTimeMs?: number;
   errors?: string[];
   progress?: AgentProcessingProgress[]; // Full progress history

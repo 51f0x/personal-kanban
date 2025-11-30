@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as Joi from 'joi';
 import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '../../shared/utils';
-import { summarizationResultSchema } from '../../shared/schemas/agent-schemas';
+import { summarizationResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateContentSize, INPUT_LIMITS } from '../../shared/utils/input-validator.util';
 
 export interface SummarizationResult {
@@ -26,6 +25,11 @@ export interface SummarizationResult {
 @Injectable()
 export class ContentSummarizerAgent extends BaseAgent {
   readonly agentId = 'content-summarizer-agent';
+
+  readonly maxLength = 500;
+  readonly minLength = 100;
+
+  readonly model = 'granite4:1b';
 
   constructor(config: ConfigService) {
     super(config, ContentSummarizerAgent.name);
@@ -96,17 +100,10 @@ export class ContentSummarizerAgent extends BaseAgent {
 
       const summaryText = response.response || '';
 
-      // Parse and validate JSON
-      const summarySchema = summarizationResultSchema.keys({
-        originalLength: Joi.number().integer().min(0).required(),
-        summary: Joi.string().required(),
-        keyPoints: Joi.array().items(Joi.string().max(200)).max(10).optional(),
-        wordCount: Joi.number().integer().min(0).optional(),
-      });
-
+      // Parse and validate JSON (LLM response doesn't include agentId/success/originalLength/wordCount)
       const parseResult = parseAndValidateJson(
         summaryText,
-        summarySchema,
+        summarizationResponseSchema,
         this.logger,
         'content summarization',
       );
