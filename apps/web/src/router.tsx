@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import HomeView from './pages/HomeView';
 import { BoardView } from './pages/BoardView';
+import EmptyBoardView from './pages/EmptyBoardView';
 import CaptureContentView from './pages/CaptureContentView';
 import LoginView from './pages/LoginView';
 import SignUpView from './pages/SignUpView';
@@ -32,6 +33,54 @@ export function AppRoutes() {
         element={
           <ProtectedRoute>
             <CaptureContentView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/empty"
+        element={
+          <ProtectedRoute>
+            <EmptyBoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/:boardId/stale"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/:boardId/someday"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/:boardId/waiting"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/:boardId/projects"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/board/:boardId/analytics"
+        element={
+          <ProtectedRoute>
+            <BoardView />
           </ProtectedRoute>
         }
       />

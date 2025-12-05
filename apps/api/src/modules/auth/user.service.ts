@@ -17,7 +17,7 @@ export class UserService {
             passwordHash = await this.passwordService.hashPassword(dto.password);
         }
 
-        return this.prisma.user.upsert({
+        const result = await this.prisma.user.upsert({
             where: { email: dto.email },
             update: {
                 name: dto.name,
@@ -49,6 +49,18 @@ export class UserService {
                 },
             },
         });
+
+        // Set the first board as default if no default is set
+        if (result.boards.length > 0 && !result.defaultBoardId) {
+            const firstBoard = result.boards[0];
+            await this.prisma.user.update({
+                where: { id: result.id },
+                data: { defaultBoardId: firstBoard.id },
+            });
+            result.defaultBoardId = firstBoard.id;
+        }
+
+        return result;
     }
 
     listUsers() {

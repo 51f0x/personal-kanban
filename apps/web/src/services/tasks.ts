@@ -9,10 +9,12 @@ export async function moveTask(
     taskId: string,
     columnId: string,
     forceWipOverride: boolean = false,
+    position?: number,
 ): Promise<MoveTaskResult> {
     return apiPost<MoveTaskResult>(`/tasks/${taskId}/move`, {
         columnId,
         forceWipOverride,
+        position,
     });
 }
 

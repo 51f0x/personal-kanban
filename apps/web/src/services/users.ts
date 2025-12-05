@@ -6,6 +6,7 @@ export interface User {
     email: string;
     name: string;
     timezone?: string;
+    defaultBoardId?: string | null;
     boards?: Board[];
     passwordHash?: string;
 }

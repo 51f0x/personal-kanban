@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Home,
   ListTodo,
@@ -81,7 +81,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useTasks } from '@/hooks/useTasks';
-import { fetchBoardById, updateBoard, deleteBoard } from '@/services/boards';
+import { fetchBoardById, updateBoard, deleteBoard, fetchBoards } from '@/services/boards';
 import { createTask, updateTask } from '@/services/tasks';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
 import type { Board, Column, Task, TaskContext, TaskPriority } from '@/services/types';
@@ -90,9 +90,11 @@ import { SearchDialog } from '@/components/SearchDialog';
 import { ContextFilterBar } from '@/components/ContextFilterBar';
 import { ShareDialog } from '@/components/ShareDialog';
 import { ProjectFilter } from '@/components/ProjectFilter';
+import { BoardAnalytics } from '@/components/analytics/BoardAnalytics';
 import { toast } from 'sonner';
 import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 // Rename Board Dialog
@@ -190,6 +192,7 @@ interface DeleteBoardDialogProps {
 
 function DeleteBoardDialog({ open, onOpenChange, board, onSuccess }: DeleteBoardDialogProps) {
   const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const boardName = board?.name || '';
@@ -207,8 +210,29 @@ function DeleteBoardDialog({ open, onOpenChange, board, onSuccess }: DeleteBoard
       toast.success('Board deleted successfully');
       onSuccess();
       onOpenChange(false);
-      // Navigate to home after deletion
-      navigate('/');
+
+      // Refresh user to get updated defaultBoardId
+      await refreshUser();
+
+      // Navigate to default board or empty view
+      if (user?.id) {
+        try {
+          const boards = await fetchBoards(user.id);
+          if (boards.length > 0) {
+            // Navigate to default board (which should be set by backend) or first board
+            const defaultBoard = boards.find((b) => b.id === user.defaultBoardId) || boards[0];
+            navigate(`/board/${defaultBoard.id}`, { replace: true });
+          } else {
+            // No boards left, navigate to empty view
+            navigate('/board/empty', { replace: true });
+          }
+        } catch {
+          // If fetching boards fails, navigate to empty view
+          navigate('/board/empty', { replace: true });
+        }
+      } else {
+        navigate('/board/empty', { replace: true });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete board');
     } finally {
@@ -939,59 +963,64 @@ function DraggableTaskCard({ task, onTaskClick }: DraggableTaskCardProps) {
   return (
     <div ref={setNodeRef} style={style} {...attributes} className="w-full">
       <Card
-        className="bg-white border border-slate-200 border-solid relative rounded-3xl shrink-0 w-full cursor-pointer hover:shadow-md transition-shadow"
+        className="group bg-white border border-slate-200/80 relative rounded-2xl shrink-0 w-full cursor-pointer hover:shadow-lg hover:border-slate-300 transition-all duration-200 overflow-hidden"
         onClick={() => onTaskClick?.(task)}
       >
-        <div className="box-border flex flex-col gap-4 items-start overflow-clip p-3 relative rounded-[inherit] w-full">
-          <div className="flex items-start gap-2 w-full">
+        <div className="flex flex-col p-4 gap-3 w-full">
+          {/* Header: Priority badge and drag handle */}
+          <div className="flex items-start justify-between gap-2 w-full">
+            <div className={cn(
+              colors.bg,
+              'inline-flex items-center justify-center px-2.5 py-1 rounded-full shrink-0'
+            )}>
+              <span className={cn('font-semibold text-xs leading-tight', colors.text)}>
+                {priority}
+              </span>
+            </div>
             <button
               {...listeners}
-              className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
+              className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600 transition-opacity"
               type="button"
+              onClick={(e) => e.stopPropagation()}
             >
               <GripVertical className="size-4" />
             </button>
-            <div className="flex flex-col gap-3 items-start relative shrink-0 flex-1">
-              <div className={cn(colors.bg, 'box-border flex gap-1 items-center justify-center overflow-clip px-2 py-1 relative rounded-[1234px] shrink-0')}>
-                <p className={cn('font-semibold leading-4 relative shrink-0 text-xs text-center whitespace-pre', colors.text)}>
-                  {priority}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 items-start relative shrink-0 text-base w-full">
-                <p className="font-bold leading-[22px] relative shrink-0 text-slate-800 w-full">
-                  {task.title}
-                </p>
-                {task.description && (
-                  <p className="font-normal leading-[1.6] relative shrink-0 text-slate-600 w-full line-clamp-2">
-                    {task.description}
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
-          <div className="flex gap-4 items-center relative shrink-0 w-full">
-            <div className="basis-0 box-border flex grow items-start min-h-px min-w-px pl-0 pr-2 py-0 relative shrink-0">
-              <Avatar className="border-2 border-solid border-white relative rounded-full shrink-0 size-8">
-                <AvatarFallback className="bg-indigo-100 text-indigo-600 text-xs">
+
+          {/* Content: Title and description */}
+          <div className="flex flex-col gap-1.5 w-full">
+            <h3 className="font-semibold text-sm leading-5 text-slate-900 line-clamp-2">
+              {task.title}
+            </h3>
+            {task.description && (
+              <p className="text-xs leading-5 text-slate-500 line-clamp-2">
+                {task.description}
+              </p>
+            )}
+          </div>
+
+          {/* Footer: Avatar and metadata */}
+          <div className="flex items-center justify-between gap-2 w-full pt-1">
+            <div className="flex items-center gap-2">
+              <Avatar className="size-7 border-2 border-white shadow-sm">
+                <AvatarFallback className="bg-indigo-100 text-indigo-600 text-xs font-medium">
                   {task.ownerId.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             </div>
-            <div className="flex gap-4 items-start relative shrink-0">
+            <div className="flex items-center gap-3">
               {comments > 0 && (
-                <div className="flex gap-1 items-center relative shrink-0">
-                  <MessageCircle className="relative shrink-0 size-4 text-slate-400" />
-                  <p className="font-semibold leading-[22px] relative shrink-0 text-base text-center whitespace-pre text-slate-800">
-                    {comments}
-                  </p>
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <MessageCircle className="size-3.5" />
+                  <span className="text-xs font-medium">{comments}</span>
                 </div>
               )}
               {totalCheckmarks > 0 && (
-                <div className="flex gap-1 items-center relative shrink-0">
-                  <CheckCircle2 className="relative shrink-0 size-4 text-slate-400" />
-                  <p className="font-semibold leading-[22px] relative shrink-0 text-base text-center whitespace-pre text-slate-800">
+                <div className="flex items-center gap-1.5 text-slate-500">
+                  <CheckCircle2 className={cn('size-3.5', checkmarks === totalCheckmarks && 'text-green-500')} />
+                  <span className="text-xs font-medium">
                     {checkmarks}/{totalCheckmarks}
-                  </p>
+                  </span>
                 </div>
               )}
             </div>
@@ -1110,7 +1139,21 @@ function KanbanColumn({ column, tasks, onAddTask, onTaskClick }: KanbanColumnPro
 // Main BoardView Component with all features
 export function BoardView() {
   const { boardId } = useParams<{ boardId: string }>();
-  const [activeTab, setActiveTab] = useState('By Total Tasks');
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const location = useLocation();
+
+  // Check route for filter tabs
+  const pathname = location.pathname;
+  const getInitialTab = () => {
+    if (pathname.endsWith('/stale')) return 'Stale Tasks';
+    if (pathname.endsWith('/someday')) return 'Someday';
+    if (pathname.endsWith('/waiting')) return 'Waiting';
+    if (pathname.endsWith('/projects')) return 'Projects';
+    if (pathname.endsWith('/analytics')) return 'Analytics';
+    return 'By Total Tasks';
+  };
+  const [activeTab, setActiveTab] = useState(getInitialTab());
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [board, setBoard] = useState<Board | null>(null);
   const [loadingBoard, setLoadingBoard] = useState(true);
@@ -1151,6 +1194,24 @@ export function BoardView() {
         setBoard(boardData);
       } catch (err) {
         setBoardError(err instanceof Error ? err.message : 'Failed to load board');
+        // If board not found, redirect to default board or empty view
+        if (user?.id) {
+          try {
+            const boards = await fetchBoards(user.id);
+            if (boards.length > 0) {
+              // Redirect to default board or first board
+              const defaultBoard = boards.find((b) => b.id === user.defaultBoardId) || boards[0];
+              navigate(`/board/${defaultBoard.id}`, { replace: true });
+              return;
+            }
+            // No boards, redirect to empty view
+            navigate('/board/empty', { replace: true });
+            return;
+          } catch {
+            // If fetching boards fails, show error
+            toast.error('Failed to load board');
+          }
+        }
         toast.error('Failed to load board');
       } finally {
         setLoadingBoard(false);
@@ -1158,7 +1219,7 @@ export function BoardView() {
     };
 
     loadBoard();
-  }, [boardId]);
+  }, [boardId, user, navigate]);
 
   // Use tasks hook
   const { tasks, loading: loadingTasks, error: tasksError, moveTask, deleteTask, refresh: refreshTasks } = useTasks(boardId || null);
@@ -1219,6 +1280,27 @@ export function BoardView() {
         break;
       case 'Tasks Completed':
         filtered = filtered.filter((task) => task.isDone);
+        break;
+      case 'Stale Tasks':
+        filtered = filtered.filter((task) => task.stale);
+        break;
+      case 'Someday':
+        // Tasks in SOMEDAY columns
+        filtered = filtered.filter((task) => {
+          const column = board?.columns.find((c) => c.id === task.columnId);
+          return column?.type === 'SOMEDAY';
+        });
+        break;
+      case 'Waiting':
+        // Tasks in WAITING columns OR tasks with waitingFor field set
+        filtered = filtered.filter((task) => {
+          const column = board?.columns.find((c) => c.id === task.columnId);
+          return column?.type === 'WAITING' || !!task.waitingFor;
+        });
+        break;
+      case 'Projects':
+        // Tasks that have a project assigned
+        filtered = filtered.filter((task) => !!task.projectId);
         break;
     }
 
@@ -1338,9 +1420,11 @@ export function BoardView() {
     const isColumn = board?.columns.some((col) => col.id === targetId);
 
     if (isColumn) {
-      // Dropping on a column - move task to that column
+      // Dropping on a column - move task to that column (at the end)
       const currentTask = tasks?.find((t) => t.id === taskId);
-      if (!currentTask || currentTask.columnId === targetId) {
+      if (!currentTask) return;
+
+      if (currentTask.columnId === targetId) {
         // Already in the same column, no need to move
         return;
       }
@@ -1358,13 +1442,44 @@ export function BoardView() {
     } else {
       // Dropping on another task - find which column that task is in
       const targetTask = tasks?.find((t) => t.id === targetId);
-      if (targetTask) {
-        const currentTask = tasks?.find((t) => t.id === taskId);
-        if (!currentTask || currentTask.columnId === targetTask.columnId) {
-          // Already in the same column, no need to move
-          return;
+      if (!targetTask) return;
+
+      const currentTask = tasks?.find((t) => t.id === taskId);
+      if (!currentTask) return;
+
+      const isSameColumn = currentTask.columnId === targetTask.columnId;
+
+      if (isSameColumn) {
+        // Reordering within the same column
+        const columnTasks = tasksByColumn.get(targetTask.columnId) || [];
+        const currentIndex = columnTasks.findIndex((t) => t.id === taskId);
+        const targetIndex = columnTasks.findIndex((t) => t.id === targetId);
+
+        if (currentIndex === -1 || targetIndex === -1) return;
+
+        // Calculate new position based on target task's position
+        // Use the target task's position value from the database
+        let newPosition: number;
+        if (currentIndex < targetIndex) {
+          // Dragging down: place at target's position (will shift target and others down)
+          newPosition = targetTask.position;
+        } else {
+          // Dragging up: place at target's position (will shift target and others down)
+          newPosition = targetTask.position;
         }
 
+        try {
+          const result = await moveTask(taskId, targetTask.columnId, false, newPosition);
+          if (!result.success && result.wipStatus?.atLimit) {
+            toast.warning(`WIP limit reached for ${result.wipStatus.columnName}`);
+          } else {
+            toast.success('Task reordered');
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Failed to reorder task');
+        }
+      } else {
+        // Moving to a different column
         try {
           const result = await moveTask(taskId, targetTask.columnId);
           if (!result.success && result.wipStatus?.atLimit) {
@@ -1377,7 +1492,7 @@ export function BoardView() {
         }
       }
     }
-  }, [moveTask, board, tasks]);
+  }, [moveTask, board, tasks, tasksByColumn]);
 
   // Handle drag over (for visual feedback)
   const handleDragOver = useCallback((event: DragOverEvent) => {
@@ -1423,6 +1538,7 @@ export function BoardView() {
         handleAddTask={handleAddTask}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        navigate={navigate}
         sortBy={sortBy}
         setSortBy={setSortBy}
         sortedColumns={sortedColumns}
@@ -1469,6 +1585,7 @@ function BoardViewContent({
   handleAddTask,
   activeTab,
   setActiveTab,
+  navigate,
   sortBy,
   setSortBy,
   sortedColumns,
@@ -1509,6 +1626,7 @@ function BoardViewContent({
   handleAddTask: (columnId: string) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  navigate: ReturnType<typeof useNavigate>;
   sortBy: 'newest' | 'oldest' | 'title';
   setSortBy: (sort: 'newest' | 'oldest' | 'title') => void;
   sortedColumns: Column[];
@@ -1545,6 +1663,7 @@ function BoardViewContent({
   onBoardRenameSuccess: () => void;
 }) {
   const { open } = useSidebar();
+  const location = useLocation();
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -1571,11 +1690,34 @@ function BoardViewContent({
           <div className="border-b bg-slate-50/50">
             <div className="flex items-center justify-between px-4 lg:px-6">
               <div className="flex items-center gap-2">
-                {['By Status', 'By Total Tasks', 'Tasks Due', 'Extra Tasks', 'Tasks Completed'].map((tab) => (
+                {['By Status', 'By Total Tasks', 'Tasks Due', 'Extra Tasks', 'Tasks Completed', 'Stale Tasks', 'Someday', 'Waiting', 'Projects', 'Analytics'].map((tab) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      // Update URL when switching filter tabs
+                      const basePath = location.pathname.replace(/\/\/(stale|someday|waiting|projects|analytics)$/, '');
+                      const filterRoutes: Record<string, string> = {
+                        'Stale Tasks': '/stale',
+                        'Someday': '/someday',
+                        'Waiting': '/waiting',
+                        'Projects': '/projects',
+                        'Analytics': '/analytics',
+                      };
+
+                      if (filterRoutes[tab]) {
+                        // Navigate to filter route
+                        if (!location.pathname.endsWith(filterRoutes[tab])) {
+                          navigate(`${basePath}${filterRoutes[tab]}`, { replace: true });
+                        }
+                      } else {
+                        // Navigate to base board route (remove any filter suffix)
+                        if (location.pathname.match(/\/(stale|someday|waiting|projects|analytics)$/)) {
+                          navigate(basePath, { replace: true });
+                        }
+                      }
+                    }}
                     className={cn(
                       'border-b-2 min-h-12 px-4 py-3 relative shrink-0 transition-colors',
                       activeTab === tab
@@ -1587,9 +1729,14 @@ function BoardViewContent({
                       <span className="font-bold text-sm whitespace-nowrap">
                         {tab}
                       </span>
-                      {tab === 'By Total Tasks' && (
+                      {(tab === 'By Total Tasks' || tab === 'Stale Tasks' || tab === 'Someday' || tab === 'Waiting' || tab === 'Projects') && (
                         <Badge variant="secondary" className="text-xs">
                           {filteredAndSortedTasks.length}
+                        </Badge>
+                      )}
+                      {tab === 'Analytics' && (
+                        <Badge variant="secondary" className="text-xs">
+                          📊
                         </Badge>
                       )}
                     </div>
@@ -1621,40 +1768,46 @@ function BoardViewContent({
             </div>
           </div>
 
-          {/* Kanban Board with DnD */}
-          <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
-            {sortedColumns.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-slate-400">No columns found</p>
-              </div>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-              >
-                <div className="flex gap-4 items-start relative shrink-0 w-full overflow-x-auto">
-                  {sortedColumns.map((column) => {
-                    const columnTasks = tasksByColumn.get(column.id) || [];
-                    return (
-                      <KanbanColumn
-                        key={column.id}
-                        column={column}
-                        tasks={columnTasks}
-                        onAddTask={handleAddTask}
-                        onTaskClick={handleTaskClick}
-                      />
-                    );
-                  })}
+          {/* Content Area - Kanban Board or Analytics */}
+          {activeTab === 'Analytics' ? (
+            <div className="flex flex-1 flex-col overflow-auto">
+              {boardId && <BoardAnalytics boardId={boardId} />}
+            </div>
+          ) : (
+            <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
+              {sortedColumns.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-slate-400">No columns found</p>
                 </div>
-                <DragOverlay>
-                  {activeTask && <DraggableTaskCard task={activeTask} />}
-                </DragOverlay>
-              </DndContext>
-            )}
-          </div>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCorners}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                >
+                  <div className="flex gap-4 items-start relative shrink-0 w-full overflow-x-auto">
+                    {sortedColumns.map((column) => {
+                      const columnTasks = tasksByColumn.get(column.id) || [];
+                      return (
+                        <KanbanColumn
+                          key={column.id}
+                          column={column}
+                          tasks={columnTasks}
+                          onAddTask={handleAddTask}
+                          onTaskClick={handleTaskClick}
+                        />
+                      );
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {activeTask && <DraggableTaskCard task={activeTask} />}
+                  </DragOverlay>
+                </DndContext>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

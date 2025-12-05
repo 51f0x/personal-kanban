@@ -48,6 +48,7 @@ model User {
   name               String?
   passwordHash       String?             // Argon2 hashed password
   timezone           String?             @default("UTC")
+  defaultBoardId     String?             @db.Uuid
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   boards             Board[]
@@ -55,6 +56,9 @@ model User {
   projects           Project[]
   rules              Rule[]
   recurringTemplates RecurringTemplate[]
+  defaultBoard       Board?              @relation("UserDefaultBoard", fields: [defaultBoardId], references: [id], onDelete: SetNull)
+
+  @@index([defaultBoardId])
 }
 
 model Board {
@@ -66,6 +70,7 @@ model Board {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   owner       User                @relation(fields: [ownerId], references: [id])
+  defaultFor  User[]              @relation("UserDefaultBoard")
   columns     Column[]
   projects    Project[]
   tasks       Task[]
@@ -125,6 +130,7 @@ model Task {
   needsBreakdown Boolean         @default(false)
   metadata       Json?
   isDone         Boolean         @default(false)
+  position       Int             @default(0)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   completedAt    DateTime?
@@ -144,6 +150,7 @@ model Task {
   @@index([projectId])
   @@index([ownerId])
   @@index([stale])
+  @@index([columnId, position])
 }
 
 model ChecklistItem {
