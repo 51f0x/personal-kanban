@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { BoardService } from './board.service';
 import { CreateBoardDto } from './dto/create-board.input';
@@ -51,5 +51,15 @@ export class BoardController {
   @ApiResponse({ status: 404, description: 'Board not found' })
   updateBoard(@Param('id') id: string, @Body() dto: UpdateBoardDto) {
     return this.boardService.updateBoard(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete board', description: 'Delete a board and all its associated data' })
+  @ApiParam({ name: 'id', description: 'Board ID' })
+  @ApiResponse({ status: 200, description: 'Board deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Board not found' })
+  deleteBoard(@Param('id') id: string) {
+    return this.boardService.deleteBoard(id);
   }
 }

@@ -1,50 +1,111 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Home,
     ListTodo,
-    Users,
-    Puzzle,
-    CreditCard,
     Settings,
     HelpCircle,
-    Search,
     X,
     Plus,
+    LogOut,
+    User,
+    Calendar,
+    Clock,
+    Archive,
+    Folder,
+    BarChart3,
+    Sparkles,
+    ChevronDown,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
-import { SidebarGroup, SidebarGroupContent, SidebarInput } from '@/components/ui/sidebar';
-import { Label } from '@/components/ui/label';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/utils';
-
-// SearchForm Component
-function SearchForm({ ...props }: React.ComponentProps<"form">) {
-    return (
-        <form {...props}>
-            <SidebarGroup className="py-0">
-                <SidebarGroupContent className="relative">
-                    <Label htmlFor="search" className="sr-only">
-                        Search
-                    </Label>
-                    <SidebarInput
-                        id="search"
-                        placeholder="Search the docs..."
-                        className="pl-8"
-                    />
-                    <Search className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 opacity-50 select-none" />
-                </SidebarGroupContent>
-            </SidebarGroup>
-        </form>
-    );
-}
+import { useTasks } from '@/hooks/useTasks';
+import { useBoards } from '@/hooks/useBoards';
+import { createBoardWithDefaultColumns } from '@/services/boards';
+import { toast } from 'sonner';
+import { useSidebar } from '@/components/ui/sidebar';
 
 interface AppSidebarProps {
     boardId?: string;
 }
 
 export function AppSidebar({ boardId }: AppSidebarProps) {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
+    const { isMobile } = useSidebar();
+    const [showPromoCard, setShowPromoCard] = useState(true);
+    const [isCreatingBoard, setIsCreatingBoard] = useState(false);
+
+    // Get real task count for current board
+    const { tasks } = useTasks(boardId || null);
+    const taskCount = tasks?.length || 0;
+
+    // Get boards list for switching
+    const { boards, loading: boardsLoading, refresh: refreshBoards } = useBoards(user?.id);
+
+    // Listen for board updates to refresh the boards list
+    useEffect(() => {
+        const handleBoardUpdate = () => {
+            if (user?.id) {
+                refreshBoards();
+            }
+        };
+
+        // Listen to custom event for board updates
+        window.addEventListener('board:updated', handleBoardUpdate);
+        // Also listen to realtime board:update events
+        window.addEventListener('board:realtime-update', handleBoardUpdate);
+
+        return () => {
+            window.removeEventListener('board:updated', handleBoardUpdate);
+            window.removeEventListener('board:realtime-update', handleBoardUpdate);
+        };
+    }, [user?.id, refreshBoards]);
+
+    // Load promotional card dismissal state from localStorage
+    useEffect(() => {
+        const dismissed = localStorage.getItem('sidebar_promo_dismissed');
+        if (dismissed === 'true') {
+            setShowPromoCard(false);
+        }
+    }, []);
+
+    // Handle promotional card dismissal
+    const handleDismissPromo = useCallback(() => {
+        setShowPromoCard(false);
+        localStorage.setItem('sidebar_promo_dismissed', 'true');
+    }, []);
+
+    // Handle board creation
+    const handleCreateBoard = useCallback(async () => {
+        if (!user?.id) {
+            toast.error('Please log in to create a board');
+            return;
+        }
+
+        setIsCreatingBoard(true);
+        try {
+            const newBoard = await createBoardWithDefaultColumns(user.id, user.name || 'User');
+            toast.success('Board created successfully');
+            await refreshBoards();
+            navigate(`/board/${newBoard.id}`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to create board');
+        } finally {
+            setIsCreatingBoard(false);
+        }
+    }, [user, refreshBoards, navigate]);
 
     // Generate initials from user name or email
     const getInitials = (): string => {
@@ -66,9 +127,19 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
         if (path === '/settings') {
             return location.pathname === '/settings';
         }
+        if (path === '/capture') {
+            return location.pathname === '/capture';
+        }
         if (path.startsWith('/board/') && boardId) {
             return location.pathname === `/board/${boardId}`;
         }
+        // Check for GTD views
+        if (path === '/someday') return location.pathname === '/someday';
+        if (path === '/waiting') return location.pathname === '/waiting';
+        if (path === '/stale') return location.pathname === '/stale';
+        if (path === '/clarify') return location.pathname === '/clarify';
+        if (path === '/projects') return location.pathname === '/projects';
+        if (path === '/analytics') return location.pathname === '/analytics';
         return false;
     };
 
@@ -94,8 +165,61 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                     </span>
                 </div>
 
-                {/* Search */}
-                <SearchForm />
+                {/* Board Switcher */}
+                {user?.id && (
+                    <div className="w-full">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    className="w-full justify-between bg-indigo-500 hover:bg-indigo-400 text-white border-0"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Folder className="size-4" />
+                                        <span className="font-medium">
+                                            {boardId && boards.length > 0
+                                                ? boards.find((b) => b.id === boardId)?.name || 'Select Board'
+                                                : 'Select Board'}
+                                        </span>
+                                    </span>
+                                    <ChevronDown className="size-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-[240px]">
+                                <DropdownMenuLabel>Boards</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {boardsLoading ? (
+                                    <DropdownMenuItem disabled>Loading...</DropdownMenuItem>
+                                ) : boards.length === 0 ? (
+                                    <DropdownMenuItem disabled>No boards found</DropdownMenuItem>
+                                ) : (
+                                    boards.map((board) => (
+                                        <DropdownMenuItem
+                                            key={board.id}
+                                            onClick={() => navigate(`/board/${board.id}`)}
+                                            className={cn(
+                                                'cursor-pointer',
+                                                boardId === board.id && 'bg-accent'
+                                            )}
+                                        >
+                                            <Folder className="size-4 mr-2" />
+                                            {board.name}
+                                        </DropdownMenuItem>
+                                    ))
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={handleCreateBoard}
+                                    disabled={isCreatingBoard}
+                                    className="cursor-pointer"
+                                >
+                                    <Plus className="size-4 mr-2" />
+                                    {isCreatingBoard ? 'Creating...' : 'Create New Board'}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                )}
 
                 {/* Navigation */}
                 <nav className="flex flex-col gap-2 items-start relative shrink-0 w-full">
@@ -106,17 +230,14 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                             className={getNavItemClasses(`/board/${boardId}`)}
                         >
                             <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                <Home className={cn(
-                                    "relative shrink-0 size-6",
-                                    isActive(`/board/${boardId}`) ? "text-white" : "text-white"
-                                )} />
+                                <Home className="relative shrink-0 size-6 text-white" />
                                 <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                     Home
                                 </p>
                             </div>
                             <div className="bg-white box-border flex gap-1.5 items-center justify-center overflow-clip px-2.5 py-1 relative rounded-[1234px] shrink-0">
                                 <p className="font-semibold leading-5 relative shrink-0 text-sm text-center text-indigo-600 whitespace-pre">
-                                    10
+                                    {taskCount}
                                 </p>
                             </div>
                         </Link>
@@ -130,22 +251,112 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                             </div>
                             <div className="bg-white box-border flex gap-1.5 items-center justify-center overflow-clip px-2.5 py-1 relative rounded-[1234px] shrink-0">
                                 <p className="font-semibold leading-5 relative shrink-0 text-sm text-center text-indigo-600 whitespace-pre">
-                                    10
+                                    {taskCount}
                                 </p>
                             </div>
                         </div>
                     )}
 
-                    {/* Tasks */}
-                    <div className={getNavItemClasses('', false)}>
+                    {/* Tasks - Link to capture or board tasks */}
+                    <Link
+                        to={boardId ? `/board/${boardId}` : '/capture'}
+                        className={getNavItemClasses(boardId ? `/board/${boardId}` : '/capture')}
+                    >
                         <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                            <ListTodo className="relative shrink-0 size-6 text-indigo-200" />
+                            <ListTodo className={cn(
+                                "relative shrink-0 size-6",
+                                isActive(boardId ? `/board/${boardId}` : '/capture') ? "text-white" : "text-indigo-200"
+                            )} />
                             <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                 Tasks
                             </p>
                         </div>
-                    </div>
+                    </Link>
 
+                    {/* GTD Views */}
+                    {boardId && (
+                        <>
+                            {/* Someday/Maybe */}
+                            <Link
+                                to={`/board/${boardId}/someday`}
+                                className={getNavItemClasses('/someday')}
+                            >
+                                <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+                                    <Sparkles className={cn(
+                                        "relative shrink-0 size-6",
+                                        isActive('/someday') ? "text-white" : "text-indigo-200"
+                                    )} />
+                                    <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
+                                        Someday
+                                    </p>
+                                </div>
+                            </Link>
+
+                            {/* Waiting For */}
+                            <Link
+                                to={`/board/${boardId}/waiting`}
+                                className={getNavItemClasses('/waiting')}
+                            >
+                                <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+                                    <Clock className={cn(
+                                        "relative shrink-0 size-6",
+                                        isActive('/waiting') ? "text-white" : "text-indigo-200"
+                                    )} />
+                                    <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
+                                        Waiting
+                                    </p>
+                                </div>
+                            </Link>
+
+                            {/* Stale Tasks */}
+                            <Link
+                                to={`/board/${boardId}/stale`}
+                                className={getNavItemClasses('/stale')}
+                            >
+                                <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+                                    <Calendar className={cn(
+                                        "relative shrink-0 size-6",
+                                        isActive('/stale') ? "text-white" : "text-indigo-200"
+                                    )} />
+                                    <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
+                                        Stale
+                                    </p>
+                                </div>
+                            </Link>
+
+                            {/* Projects */}
+                            <Link
+                                to={`/board/${boardId}/projects`}
+                                className={getNavItemClasses('/projects')}
+                            >
+                                <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+                                    <Folder className={cn(
+                                        "relative shrink-0 size-6",
+                                        isActive('/projects') ? "text-white" : "text-indigo-200"
+                                    )} />
+                                    <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
+                                        Projects
+                                    </p>
+                                </div>
+                            </Link>
+
+                            {/* Analytics */}
+                            <Link
+                                to={`/board/${boardId}/analytics`}
+                                className={getNavItemClasses('/analytics')}
+                            >
+                                <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+                                    <BarChart3 className={cn(
+                                        "relative shrink-0 size-6",
+                                        isActive('/analytics') ? "text-white" : "text-indigo-200"
+                                    )} />
+                                    <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
+                                        Analytics
+                                    </p>
+                                </div>
+                            </Link>
+                        </>
+                    )}
 
                     {/* Settings */}
                     <Link
@@ -164,44 +375,67 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                     </Link>
 
                     {/* Help & Support */}
-                    <div className={getNavItemClasses('', false)}>
+                    <a
+                        href="https://github.com/51f0x/personal-kanban"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={getNavItemClasses('')}
+                    >
                         <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
                             <HelpCircle className="relative shrink-0 size-6 text-indigo-200" />
                             <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                 Help & Support
                             </p>
                         </div>
-                    </div>
+                    </a>
                 </nav>
             </div>
 
             <div className="flex flex-col gap-6 items-start relative shrink-0 w-full">
                 {/* Promotional Card */}
-                <div className="bg-indigo-500 box-border flex flex-col gap-4 items-start overflow-clip p-4 relative rounded-3xl shrink-0 w-full">
-                    <div className="flex gap-4 items-start relative shrink-0 w-full">
-                        <div className="basis-0 flex gap-2.5 grow items-start min-h-px min-w-px relative shrink-0">
-                            <div className="bg-indigo-400 flex gap-2.5 items-center justify-center relative rounded-full shrink-0 size-10">
-                                <HelpCircle className="relative shrink-0 size-4 text-white" />
+                {showPromoCard && (
+                    <div className="bg-indigo-500 box-border flex flex-col gap-4 items-start overflow-clip p-4 relative rounded-3xl shrink-0 w-full">
+                        <div className="flex gap-4 items-start relative shrink-0 w-full">
+                            <div className="basis-0 flex gap-2.5 grow items-start min-h-px min-w-px relative shrink-0">
+                                <div className="bg-indigo-400 flex gap-2.5 items-center justify-center relative rounded-full shrink-0 size-10">
+                                    <HelpCircle className="relative shrink-0 size-4 text-white" />
+                                </div>
                             </div>
+                            <button
+                                type="button"
+                                onClick={handleDismissPromo}
+                                className="relative shrink-0 size-4 text-white cursor-pointer hover:opacity-70 transition-opacity"
+                                aria-label="Dismiss promotional card"
+                            >
+                                <X className="size-4" />
+                            </button>
                         </div>
-                        <X className="relative shrink-0 size-4 text-white cursor-pointer" />
+                        <p className="font-normal leading-[1.6] min-w-full relative shrink-0 text-sm text-indigo-100">
+                            Enjoy unlimited access to our app with only a small price monthly.
+                        </p>
+                        <div className="flex gap-4 items-start relative shrink-0">
+                            <button
+                                type="button"
+                                onClick={handleDismissPromo}
+                                className="flex gap-2 items-center justify-center overflow-clip relative shrink-0 hover:opacity-70 transition-opacity"
+                            >
+                                <p className="font-bold leading-5 relative shrink-0 text-sm text-nowrap text-indigo-200 whitespace-pre">
+                                    Dismiss
+                                </p>
+                            </button>
+                            <a
+                                href="https://github.com/51f0x/personal-kanban"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex gap-2 items-center justify-center overflow-clip relative shrink-0 hover:opacity-70 transition-opacity"
+                            >
+                                <p className="font-bold leading-5 relative shrink-0 text-sm text-nowrap text-white whitespace-pre">
+                                    Learn More
+                                </p>
+                            </a>
+                        </div>
                     </div>
-                    <p className="font-normal leading-[1.6] min-w-full relative shrink-0 text-sm text-indigo-100">
-                        Enjoy unlimited access to our app with only a small price monthly.
-                    </p>
-                    <div className="flex gap-4 items-start relative shrink-0">
-                        <button type="button" className="flex gap-2 items-center justify-center overflow-clip relative shrink-0">
-                            <p className="font-bold leading-5 relative shrink-0 text-sm text-nowrap text-indigo-200 whitespace-pre">
-                                Dismiss
-                            </p>
-                        </button>
-                        <button type="button" className="flex gap-2 items-center justify-center overflow-clip relative shrink-0">
-                            <p className="font-bold leading-5 relative shrink-0 text-sm text-nowrap text-white whitespace-pre">
-                                Go Pro
-                            </p>
-                        </button>
-                    </div>
-                </div>
+                )}
 
                 {/* User Profile */}
                 <div className="border-t border-indigo-500 border-solid box-border flex gap-4 items-end pb-0 pt-6 px-0 relative shrink-0 w-full">
@@ -212,20 +446,54 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                             </AvatarFallback>
                         </Avatar>
                         <div className="basis-0 flex flex-col gap-0.5 grow h-[46px] items-start min-h-px min-w-px relative shrink-0">
-                            <p className="font-bold leading-[22px] relative shrink-0 text-base text-white w-full">
+                            <p className="font-bold leading-[22px] relative shrink-0 text-base text-white w-full truncate">
                                 {user?.name || user?.email || 'Guest'}
                             </p>
-                            <p className="font-medium leading-5 relative shrink-0 text-sm text-indigo-200 w-full">
-                                Basic Member
+                            <p className="font-medium leading-5 relative shrink-0 text-sm text-indigo-200 w-full truncate">
+                                {user?.email || 'Not logged in'}
                             </p>
                         </div>
                     </div>
-                    <div className="bg-indigo-600 box-border flex gap-2.5 items-center justify-center overflow-clip p-4 relative rounded-full shrink-0 size-10">
-                        <Plus className="relative shrink-0 size-6 text-white" />
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="bg-indigo-600 box-border flex gap-2.5 items-center justify-center overflow-clip p-4 relative rounded-full shrink-0 size-10 hover:bg-indigo-500 transition-colors"
+                                aria-label="User menu"
+                            >
+                                <Plus className="relative shrink-0 size-6 text-white rotate-45" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel>
+                                <div className="flex flex-col">
+                                    <span>{user?.name || 'User'}</span>
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                        {user?.email}
+                                    </span>
+                                </div>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                                <Link to="/settings" className="cursor-pointer">
+                                    <User className="size-4 mr-2" />
+                                    Profile & Settings
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onClick={async () => {
+                                    await logout();
+                                }}
+                                className="cursor-pointer text-red-600 focus:text-red-600"
+                            >
+                                <LogOut className="size-4 mr-2" />
+                                Logout
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
         </aside>
     );
 }
-

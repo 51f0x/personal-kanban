@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   Home,
   ListTodo,
@@ -23,6 +23,10 @@ import {
   Edit,
   Save,
   Trash2,
+  RefreshCw,
+  Info,
+  Pencil,
+  AlertTriangle,
 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import ReactMarkdown from '@uiw/react-markdown-preview';
@@ -68,24 +72,214 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useTasks } from '@/hooks/useTasks';
-import { fetchBoardById } from '@/services/boards';
+import { fetchBoardById, updateBoard, deleteBoard } from '@/services/boards';
 import { createTask, updateTask } from '@/services/tasks';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
 import type { Board, Column, Task, TaskContext, TaskPriority } from '@/services/types';
 import { HintsPanel } from '@/components/HintsPanel';
+import { SearchDialog } from '@/components/SearchDialog';
+import { ContextFilterBar } from '@/components/ContextFilterBar';
+import { ShareDialog } from '@/components/ShareDialog';
+import { ProjectFilter } from '@/components/ProjectFilter';
 import { toast } from 'sonner';
 import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 
 
+// Rename Board Dialog
+interface RenameBoardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  board: Board | null;
+  onSuccess: () => void;
+}
+
+function RenameBoardDialog({ open, onOpenChange, board, onSuccess }: RenameBoardDialogProps) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (board) {
+      setName(board.name);
+      setDescription(board.description || '');
+    }
+  }, [board]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!board || !name.trim()) {
+      toast.error('Board name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updateBoard(board.id, {
+        name: name.trim(),
+        description: description.trim() || null,
+      });
+      toast.success('Board updated successfully');
+      onSuccess();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update board');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rename Board</DialogTitle>
+          <DialogDescription>Update the board name and description</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="board-name">Board Name *</Label>
+            <Input
+              id="board-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter board name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="board-description">Description</Label>
+            <Textarea
+              id="board-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter board description (optional)"
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Delete Board Dialog
+interface DeleteBoardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  board: Board | null;
+  onSuccess: () => void;
+}
+
+function DeleteBoardDialog({ open, onOpenChange, board, onSuccess }: DeleteBoardDialogProps) {
+  const navigate = useNavigate();
+  const [confirmText, setConfirmText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const boardName = board?.name || '';
+
+  const handleDelete = async () => {
+    if (!board) return;
+    if (confirmText !== boardName) {
+      toast.error(`Please type "${boardName}" to confirm deletion`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await deleteBoard(board.id);
+      toast.success('Board deleted successfully');
+      onSuccess();
+      onOpenChange(false);
+      // Navigate to home after deletion
+      navigate('/');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete board');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-5" />
+            Delete Board
+          </DialogTitle>
+          <DialogDescription>
+            This action cannot be undone. This will permanently delete the board and all its tasks, columns, and associated data.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="rounded-lg bg-destructive/10 p-4 border border-destructive/20">
+            <p className="text-sm font-medium text-destructive mb-2">Warning: This action is irreversible</p>
+            <p className="text-sm text-muted-foreground">
+              All tasks, columns, projects, and other data associated with this board will be permanently deleted.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-delete">
+              Type <span className="font-mono font-semibold">{boardName}</span> to confirm:
+            </Label>
+            <Input
+              id="confirm-delete"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={boardName}
+              disabled={loading}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={loading || confirmText !== boardName}
+          >
+            {loading ? 'Deleting...' : 'Delete Board'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // SiteHeader Component (dashboard-01 style)
 interface SiteHeaderProps {
   board: Board | null;
   onAddTask: (columnId: string) => void;
+  onSearchClick: () => void;
+  onShareClick: () => void;
+  onRefresh?: () => void;
+  onRenameClick?: () => void;
+  onDeleteClick?: () => void;
 }
 
-function SiteHeader({ board, onAddTask }: SiteHeaderProps) {
+function SiteHeader({ board, onAddTask, onSearchClick, onShareClick, onRefresh, onRenameClick, onDeleteClick }: SiteHeaderProps) {
+  const navigate = useNavigate();
+
   const handleAddTask = () => {
     if (!board) return;
 
@@ -96,6 +290,31 @@ function SiteHeader({ board, onAddTask }: SiteHeaderProps) {
     if (targetColumn) {
       onAddTask(targetColumn.id);
     }
+  };
+
+  const handleRefresh = () => {
+    if (onRefresh) {
+      onRefresh();
+      toast.success('Board refreshed');
+    }
+  };
+
+  const handleViewSettings = () => {
+    navigate('/settings');
+  };
+
+  const handleBoardInfo = () => {
+    if (!board) return;
+    toast.info(
+      <div className="space-y-1">
+        <p className="font-semibold">{board.name}</p>
+        {board.description && <p className="text-sm">{board.description}</p>}
+        <p className="text-xs text-muted-foreground">
+          {board.columns.length} columns
+        </p>
+      </div>,
+      { duration: 3000 }
+    );
   };
 
   return (
@@ -114,16 +333,54 @@ function SiteHeader({ board, onAddTask }: SiteHeaderProps) {
             <Plus className="size-4" />
             <span className="hidden sm:inline">New Task</span>
           </Button>
-          <Button variant="ghost" size="icon" className="size-8">
+          <Button variant="ghost" size="icon" className="size-8" onClick={onSearchClick} title="Search tasks (Ctrl+K)">
             <Search className="size-4" />
           </Button>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
+          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={onShareClick}>
             <Share2 className="size-4" />
             <span className="hidden sm:inline">Share</span>
           </Button>
-          <Button variant="outline" size="icon" className="size-8">
-            <MoreVertical className="size-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="size-8">
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Board Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {onRenameClick && (
+                <DropdownMenuItem onClick={onRenameClick} className="cursor-pointer">
+                  <Pencil className="size-4 mr-2" />
+                  Rename Board
+                </DropdownMenuItem>
+              )}
+              {onRefresh && (
+                <DropdownMenuItem onClick={handleRefresh} className="cursor-pointer">
+                  <RefreshCw className="size-4 mr-2" />
+                  Refresh Board
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleBoardInfo} className="cursor-pointer" disabled={!board}>
+                <Info className="size-4 mr-2" />
+                Board Info
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleViewSettings} className="cursor-pointer">
+                <Settings className="size-4 mr-2" />
+                View Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {onDeleteClick && (
+                <DropdownMenuItem
+                  onClick={onDeleteClick}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="size-4 mr-2" />
+                  Delete Board
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
@@ -288,7 +545,7 @@ interface TaskDetailDialogProps {
   task: Task | null;
   board: Board | null;
   onUpdate: () => void;
-  onDelete: (taskId: string) => void;
+  onDelete: (taskId: string) => Promise<void>;
 }
 
 function TaskDetailDialog({ open, onOpenChange, task, board, onUpdate, onDelete }: TaskDetailDialogProps) {
@@ -352,12 +609,16 @@ function TaskDetailDialog({ open, onOpenChange, task, board, onUpdate, onDelete 
     if (!task) return;
     if (!confirm('Are you sure you want to delete this task?')) return;
 
+    setLoading(true);
     try {
-      onDelete(task.id);
+      await onDelete(task.id);
       toast.success('Task deleted');
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete task');
+      // Don't close dialog on error - let user retry or cancel
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -375,7 +636,7 @@ function TaskDetailDialog({ open, onOpenChange, task, board, onUpdate, onDelete 
                   <Edit className="size-4" />
                 </Button>
               )}
-              <Button variant="outline" size="icon" onClick={handleDelete}>
+              <Button variant="outline" size="icon" onClick={handleDelete} disabled={loading}>
                 <Trash2 className="size-4" />
               </Button>
             </div>
@@ -859,6 +1120,12 @@ export function BoardView() {
   const [showTaskDialog, setShowTaskDialog] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [selectedContexts, setSelectedContexts] = useState<Set<TaskContext>>(new Set());
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -896,13 +1163,30 @@ export function BoardView() {
   // Use tasks hook
   const { tasks, loading: loadingTasks, error: tasksError, moveTask, deleteTask, refresh: refreshTasks } = useTasks(boardId || null);
 
+  // Keyboard shortcut for search (Cmd/Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearchDialog(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Real-time updates
   useBoardRealtime(
     boardId ? [boardId] : [],
     useCallback(() => {
       refreshTasks();
       if (boardId) {
-        fetchBoardById(boardId).then(setBoard).catch(console.error);
+        fetchBoardById(boardId).then((updatedBoard) => {
+          setBoard(updatedBoard);
+          // Dispatch custom event to notify other components (like AppSidebar)
+          window.dispatchEvent(new CustomEvent('board:updated', { detail: { boardId } }));
+        }).catch(console.error);
       }
     }, [boardId, refreshTasks])
   );
@@ -938,6 +1222,16 @@ export function BoardView() {
         break;
     }
 
+    // Filter by selected contexts
+    if (selectedContexts.size > 0) {
+      filtered = filtered.filter((task) => task.context && selectedContexts.has(task.context));
+    }
+
+    // Filter by selected project
+    if (selectedProjectId) {
+      filtered = filtered.filter((task) => task.projectId === selectedProjectId);
+    }
+
     // Sort tasks
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -953,7 +1247,7 @@ export function BoardView() {
     });
 
     return filtered;
-  }, [tasks, activeTab, sortBy, board]);
+  }, [tasks, activeTab, sortBy, board, selectedContexts, selectedProjectId]);
 
   // Group tasks by column
   const tasksByColumn = useMemo(() => {
@@ -989,6 +1283,40 @@ export function BoardView() {
   const handleTaskClick = useCallback((task: Task) => {
     setSelectedTask(task);
     setShowTaskDialog(true);
+  }, []);
+
+  // Handle context filter toggle
+  const handleContextToggle = useCallback((context: TaskContext) => {
+    setSelectedContexts((prev) => {
+      const next = new Set(prev);
+      if (next.has(context)) {
+        next.delete(context);
+      } else {
+        next.add(context);
+      }
+      return next;
+    });
+  }, []);
+
+  // Handle clear context filters
+  const handleClearContextFilters = useCallback(() => {
+    setSelectedContexts(new Set());
+  }, []);
+
+  // Handle board rename success
+  const handleBoardRenameSuccess = useCallback(() => {
+    if (boardId) {
+      fetchBoardById(boardId).then((updatedBoard) => {
+        setBoard(updatedBoard);
+        // Dispatch custom event to notify other components (like AppSidebar) to refresh
+        window.dispatchEvent(new CustomEvent('board:updated', { detail: { boardId } }));
+      }).catch(console.error);
+    }
+  }, [boardId]);
+
+  // Handle board delete success (navigate handled in dialog)
+  const handleBoardDeleteSuccess = useCallback(() => {
+    // Navigation is handled in the DeleteBoardDialog component
   }, []);
 
   // Handle drag start
@@ -1114,6 +1442,21 @@ export function BoardView() {
         selectedTask={selectedTask}
         deleteTask={deleteTask}
         filteredAndSortedTasks={filteredAndSortedTasks}
+        showSearchDialog={showSearchDialog}
+        setShowSearchDialog={setShowSearchDialog}
+        tasks={tasks || []}
+        selectedContexts={selectedContexts}
+        onContextToggle={handleContextToggle}
+        onClearContextFilters={handleClearContextFilters}
+        showShareDialog={showShareDialog}
+        setShowShareDialog={setShowShareDialog}
+        selectedProjectId={selectedProjectId}
+        onProjectChange={setSelectedProjectId}
+        showRenameDialog={showRenameDialog}
+        setShowRenameDialog={setShowRenameDialog}
+        showDeleteDialog={showDeleteDialog}
+        setShowDeleteDialog={setShowDeleteDialog}
+        onBoardRenameSuccess={handleBoardRenameSuccess}
       />
     </SidebarProvider>
   );
@@ -1145,6 +1488,21 @@ function BoardViewContent({
   selectedTask,
   deleteTask,
   filteredAndSortedTasks,
+  showSearchDialog,
+  setShowSearchDialog,
+  tasks,
+  selectedContexts,
+  onContextToggle,
+  onClearContextFilters,
+  showShareDialog,
+  setShowShareDialog,
+  selectedProjectId,
+  onProjectChange,
+  showRenameDialog,
+  setShowRenameDialog,
+  showDeleteDialog,
+  setShowDeleteDialog,
+  onBoardRenameSuccess,
 }: {
   boardId: string | undefined;
   board: Board | null;
@@ -1168,8 +1526,23 @@ function BoardViewContent({
   showTaskDialog: boolean;
   setShowTaskDialog: (open: boolean) => void;
   selectedTask: Task | null;
-  deleteTask: (taskId: string) => void;
+  deleteTask: (taskId: string) => Promise<void>;
   filteredAndSortedTasks: Task[];
+  showSearchDialog: boolean;
+  setShowSearchDialog: (open: boolean) => void;
+  tasks: Task[];
+  selectedContexts: Set<TaskContext>;
+  onContextToggle: (context: TaskContext) => void;
+  onClearContextFilters: () => void;
+  showShareDialog: boolean;
+  setShowShareDialog: (open: boolean) => void;
+  selectedProjectId: string | null;
+  onProjectChange: (projectId: string | null) => void;
+  showRenameDialog: boolean;
+  setShowRenameDialog: (open: boolean) => void;
+  showDeleteDialog: boolean;
+  setShowDeleteDialog: (open: boolean) => void;
+  onBoardRenameSuccess: () => void;
 }) {
   const { open } = useSidebar();
 
@@ -1177,8 +1550,23 @@ function BoardViewContent({
     <div className="flex h-screen w-full overflow-hidden">
       {open && <AppSidebar boardId={boardId} />}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <SiteHeader board={board} onAddTask={handleAddTask} />
+        <SiteHeader
+          board={board}
+          onAddTask={handleAddTask}
+          onSearchClick={() => setShowSearchDialog(true)}
+          onShareClick={() => setShowShareDialog(true)}
+          onRefresh={refreshTasks}
+          onRenameClick={() => setShowRenameDialog(true)}
+          onDeleteClick={() => setShowDeleteDialog(true)}
+        />
         <div className="flex flex-1 flex-col overflow-auto">
+          {/* Context Filter Bar */}
+          <ContextFilterBar
+            selectedContexts={selectedContexts}
+            onContextToggle={onContextToggle}
+            onClearFilters={onClearContextFilters}
+          />
+
           {/* Tabs Section */}
           <div className="border-b bg-slate-50/50">
             <div className="flex items-center justify-between px-4 lg:px-6">
@@ -1208,18 +1596,27 @@ function BoardViewContent({
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-slate-600">Sort By</span>
-                <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'newest' | 'oldest' | 'title')}>
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">Newest</SelectItem>
-                    <SelectItem value="oldest">Oldest</SelectItem>
-                    <SelectItem value="title">Title</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center gap-4">
+                {board?.projects && board.projects.length > 0 && (
+                  <ProjectFilter
+                    projects={board.projects}
+                    selectedProjectId={selectedProjectId}
+                    onProjectChange={onProjectChange}
+                  />
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-600">Sort By</span>
+                  <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'newest' | 'oldest' | 'title')}>
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
+                      <SelectItem value="title">Title</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
@@ -1282,6 +1679,38 @@ function BoardViewContent({
           onDelete={deleteTask}
         />
       )}
+
+      <SearchDialog
+        open={showSearchDialog}
+        onOpenChange={setShowSearchDialog}
+        tasks={tasks}
+        onTaskClick={handleTaskClick}
+      />
+
+      {boardId && (
+        <ShareDialog
+          open={showShareDialog}
+          onOpenChange={setShowShareDialog}
+          boardId={boardId}
+          boardName={board?.name}
+        />
+      )}
+
+      <RenameBoardDialog
+        open={showRenameDialog}
+        onOpenChange={setShowRenameDialog}
+        board={board}
+        onSuccess={onBoardRenameSuccess}
+      />
+
+      <DeleteBoardDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        board={board}
+        onSuccess={() => {
+          // Navigation is handled in the dialog
+        }}
+      />
     </div>
   );
 }

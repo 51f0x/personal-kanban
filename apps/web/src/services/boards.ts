@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './api';
+import { apiGet, apiPost, apiPatch, apiDelete } from './api';
 import type { Board, ColumnType } from './types';
 
 export async function fetchBoards(ownerId: string): Promise<Board[]> {
@@ -35,7 +35,7 @@ export async function createColumn(boardId: string, payload: CreateColumnPayload
  */
 export async function createBoardWithDefaultColumns(
     ownerId: string,
-    userName: string
+    userName: string,
 ): Promise<Board> {
     // Create the board
     const board = await createBoard({
@@ -58,10 +58,23 @@ export async function createBoardWithDefaultColumns(
                 name: col.name,
                 type: col.type,
                 position: col.position,
-            })
-        )
+            }),
+        ),
     );
 
     // Fetch the board again to get the columns
     return fetchBoardById(board.id);
+}
+
+export interface UpdateBoardPayload {
+    name?: string;
+    description?: string | null;
+}
+
+export async function updateBoard(boardId: string, payload: UpdateBoardPayload): Promise<Board> {
+    return apiPatch<Board>(`/boards/${boardId}`, payload);
+}
+
+export async function deleteBoard(boardId: string): Promise<void> {
+    await apiDelete(`/boards/${boardId}`);
 }
