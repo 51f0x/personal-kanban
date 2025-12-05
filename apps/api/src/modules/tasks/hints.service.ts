@@ -189,6 +189,29 @@ export class HintsService {
           }
           break;
 
+        case 'priority':
+          if (hint.content) {
+            // Map priority string to enum value
+            const priorityMap: Record<string, 'LOW' | 'MEDIUM' | 'HIGH'> = {
+              low: 'LOW',
+              medium: 'MEDIUM',
+              high: 'HIGH',
+            };
+            const priorityValue = priorityMap[hint.content.toLowerCase()];
+            if (priorityValue) {
+              updates.priority = priorityValue;
+            } else {
+              this.logger.warn(`Invalid priority value: ${hint.content}`);
+            }
+          }
+          break;
+
+        case 'duration':
+          if (hint.content) {
+            updates.duration = hint.content;
+          }
+          break;
+
         default:
           this.logger.warn(`Unknown hint type: ${hint.hintType}`);
       }

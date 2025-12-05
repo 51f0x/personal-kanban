@@ -179,7 +179,7 @@ export class ActionExtractorAgent extends BaseAgent {
       content += `\n\n[Content Summary]\n${contentSummary}`;
     }
 
-    return `Extract actionable items from the following task. Break down the task into specific, concrete actions that need to be completed. Return a JSON object:
+    return `Extract actionable items from the following task to help the human perform the task step-by-step. Break down the task into specific, concrete actions that need to be completed. Return a JSON object:
 
 {
   "actions": [
@@ -196,13 +196,15 @@ Task:
 ${content}
 
 Rules:
-- Extract 1-10 specific, actionable items
-- Each action should be concrete and completable
-- Assign priority based on importance
-- Estimate duration for each action if possible
+- Your goal is to break down the task into clear, actionable steps that guide the human to complete the task successfully
+- Extract 1-10 specific, actionable items that directly help complete the task
+- Each action should be concrete and completable - something the human can actually do
+- Assign priority based on importance and logical order
+- Estimate duration for each action if possible to help with planning
 - If the task is simple, return 1-2 actions
-- If complex, break it down into 3-10 steps
+- If complex, break it down into 3-10 steps that form a clear path to completion
 - Only extract actions from the provided content - do not invent actions
+- Process all content (including summaries) with the goal of creating a clear action plan for the human
 
 Return only valid JSON, no markdown formatting.`;
   }

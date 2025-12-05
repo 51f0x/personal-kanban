@@ -1,4 +1,5 @@
 import { Controller, Get, Param, NotFoundException, Logger } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { PrismaService } from '../database/prisma.service';
 
 /**
@@ -9,6 +10,7 @@ import { PrismaService } from '../database/prisma.service';
  * To actually process tasks with agents, use the worker service directly
  * or set up BullMQ jobs to trigger agent processing.
  */
+@ApiTags('agents')
 @Controller('agents')
 export class AgentsController {
   private readonly logger = new Logger(AgentsController.name);
@@ -20,6 +22,11 @@ export class AgentsController {
    * GET /api/v1/agents/tasks/:taskId
    */
   @Get('tasks/:taskId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get task agent info', description: 'Get information about agent processing for a task' })
+  @ApiParam({ name: 'taskId', description: 'Task ID' })
+  @ApiResponse({ status: 200, description: 'Agent processing information' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
   async getTaskAgentInfo(@Param('taskId') taskId: string) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },

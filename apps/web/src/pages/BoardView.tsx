@@ -1,1074 +1,1287 @@
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useEffect, useState, useMemo, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import {
-    DndContext,
-    DragEndEvent,
-    DragOverEvent,
-    DragOverlay,
-    DragStartEvent,
-    MouseSensor,
-    TouchSensor,
-    useSensor,
-    useSensors,
-    closestCorners,
-    useDroppable,
+  Home,
+  ListTodo,
+  Users,
+  Puzzle,
+  CreditCard,
+  Settings,
+  HelpCircle,
+  Search,
+  Share2,
+  MoreVertical,
+  Plus,
+  MessageCircle,
+  CheckCircle2,
+  X,
+  ChevronDown,
+  Loader2,
+  AlertCircle,
+  GripVertical,
+  Calendar,
+  Edit,
+  Save,
+  Trash2,
+} from 'lucide-react';
+import MDEditor from '@uiw/react-md-editor';
+import ReactMarkdown from '@uiw/react-markdown-preview';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { fetchBoardById } from '../services/boards';
-import { Board, Task } from '../services/types';
-import { useTasks } from '../hooks/useTasks';
-import { useBoardRealtime } from '../hooks/useBoardRealtime';
-import { useUsers } from '../hooks/useUsers';
-import { TaskCardNew } from '../features/kanban/TaskCardNew';
-import { TaskDetailModal } from '../features/kanban/TaskDetailModal';
-import { createTask } from '../services/tasks';
-import { Button } from '@/components/base/buttons/button';
-import { Tabs } from '@/components/application/tabs/tabs';
-import { SearchLg } from '@untitledui/icons';
-import { Avatar } from '@/components/base/avatar/avatar';
-import { Input } from '@/components/base/input/input';
+import type { DragStartEvent, DragEndEvent, DragOverEvent } from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/utils/utils';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useTasks } from '@/hooks/useTasks';
+import { fetchBoardById } from '@/services/boards';
+import { createTask, updateTask } from '@/services/tasks';
+import { useBoardRealtime } from '@/hooks/useBoardRealtime';
+import type { Board, Column, Task, TaskContext, TaskPriority } from '@/services/types';
+import { HintsPanel } from '@/components/HintsPanel';
+import { toast } from 'sonner';
+import { AppSidebar } from '@/components/AppSidebar';
+import { SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 
-interface CreateTaskModalProps {
-    board: Board;
-    columnId: string;
-    onClose: () => void;
-    onCreate: () => void;
+
+// SiteHeader Component (dashboard-01 style)
+interface SiteHeaderProps {
+  board: Board | null;
+  onAddTask: (columnId: string) => void;
 }
 
-function CreateTaskModal({ board, columnId, onClose, onCreate }: CreateTaskModalProps) {
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { ownerId } = useUsers();
+function SiteHeader({ board, onAddTask }: SiteHeaderProps) {
+  const handleAddTask = () => {
+    if (!board) return;
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title.trim() || !ownerId) return;
+    // Find INPUT column or fall back to first column
+    const inputColumn = board.columns.find((col) => col.type === 'INPUT');
+    const targetColumn = inputColumn || board.columns[0];
 
-        setLoading(true);
-        try {
-            await createTask({
-                boardId: board.id,
-                columnId,
-                ownerId,
-                title: title.trim(),
-                description: description.trim() || undefined,
-            });
-            onCreate();
-            onClose();
-        } catch (err) {
-            console.error('Failed to create task:', err);
-            alert('Failed to create task. Please try again.');
-        } finally {
-            setLoading(false);
-        }
+    if (targetColumn) {
+      onAddTask(targetColumn.id);
+    }
+  };
+
+  return (
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear">
+      <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mx-2 h-4" />
+        <h1 className="text-base font-medium">Kanban Dashboard</h1>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            className="bg-indigo-600 hover:bg-indigo-700"
+            onClick={handleAddTask}
+            disabled={!board}
+          >
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">New Task</span>
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8">
+            <Search className="size-4" />
+          </Button>
+          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">
+            <Share2 className="size-4" />
+            <span className="hidden sm:inline">Share</span>
+          </Button>
+          <Button variant="outline" size="icon" className="size-8">
+            <MoreVertical className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// Task Creation Dialog
+interface CreateTaskDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  board: Board;
+  columnId: string;
+  onSuccess: () => void;
+}
+
+function CreateTaskDialog({ open, onOpenChange, board, columnId, onSuccess }: CreateTaskDialogProps) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState<string>('');
+  const [context, setContext] = useState<TaskContext | ''>('');
+  const [waitingFor, setWaitingFor] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await createTask({
+        boardId: board.id,
+        columnId,
+        ownerId: board.ownerId,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        projectId: projectId || undefined,
+        context: context || undefined,
+        waitingFor: waitingFor.trim() || undefined,
+        dueAt: dueAt || undefined,
+      });
+      toast.success('Task created successfully');
+      onSuccess();
+      onOpenChange(false);
+      // Reset form
+      setTitle('');
+      setDescription('');
+      setProjectId('');
+      setContext('');
+      setWaitingFor('');
+      setDueAt('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create task');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Task</DialogTitle>
+          <DialogDescription>Add a new task to this column</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter task title"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter task description"
+              rows={4}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="project">Project</Label>
+              <Select value={projectId || 'none'} onValueChange={(value) => setProjectId(value === 'none' ? '' : value)}>
+                <SelectTrigger id="project">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {board.projects?.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="context">Context</Label>
+              <Select value={context || 'none'} onValueChange={(value) => setContext(value === 'none' ? '' : (value as TaskContext))}>
+                <SelectTrigger id="context">
+                  <SelectValue placeholder="Select context" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="EMAIL">Email</SelectItem>
+                  <SelectItem value="MEETING">Meeting</SelectItem>
+                  <SelectItem value="PHONE">Phone</SelectItem>
+                  <SelectItem value="READ">Read</SelectItem>
+                  <SelectItem value="WATCH">Watch</SelectItem>
+                  <SelectItem value="DESK">Desk</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="waitingFor">Waiting For</Label>
+            <Input
+              id="waitingFor"
+              value={waitingFor}
+              onChange={(e) => setWaitingFor(e.target.value)}
+              placeholder="Who or what are you waiting for?"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dueAt">Due Date</Label>
+            <Input
+              id="dueAt"
+              type="datetime-local"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Task'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Task Detail/Edit Dialog
+interface TaskDetailDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  task: Task | null;
+  board: Board | null;
+  onUpdate: () => void;
+  onDelete: (taskId: string) => void;
+}
+
+function TaskDetailDialog({ open, onOpenChange, task, board, onUpdate, onDelete }: TaskDetailDialogProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [columnId, setColumnId] = useState('');
+  const [projectId, setProjectId] = useState<string>('');
+  const [context, setContext] = useState<TaskContext | ''>('');
+  const [waitingFor, setWaitingFor] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [priority, setPriority] = useState<TaskPriority | ''>('');
+  const [duration, setDuration] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (task) {
+      setTitle(task.title);
+      setDescription(task.description || '');
+      setColumnId(task.columnId);
+      setProjectId(task.projectId || '');
+      setContext(task.context || '');
+      setWaitingFor(task.waitingFor || '');
+      setDueAt(task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : '');
+      setPriority(task.priority || '');
+      setDuration(task.duration || '');
+      setIsEditing(false);
+    }
+  }, [task]);
+
+  const handleSave = async () => {
+    if (!task || !title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updateTask(task.id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        columnId,
+        projectId: projectId || undefined,
+        context: context || undefined,
+        waitingFor: waitingFor.trim() || undefined,
+        dueAt: dueAt || undefined,
+        priority: priority || undefined,
+        duration: duration.trim() || undefined,
+      });
+      toast.success('Task updated successfully');
+      setIsEditing(false);
+      onUpdate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update task');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!task) return;
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
+    try {
+      onDelete(task.id);
+      toast.success('Task deleted');
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete task');
+    }
+  };
+
+  if (!task || !board) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!max-w-[80vw] w-[80vw] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>{isEditing ? 'Edit Task' : 'Task Details'}</span>
+            <div className="flex gap-2">
+              {!isEditing && (
+                <Button variant="outline" size="icon" onClick={() => setIsEditing(true)}>
+                  <Edit className="size-4" />
+                </Button>
+              )}
+              <Button variant="outline" size="icon" onClick={handleDelete}>
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing ? 'Update task information' : 'View and manage task details'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isEditing ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Title *</Label>
+              <Input
+                id="edit-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <div data-color-mode="light">
+                <MDEditor
+                  value={description}
+                  onChange={(value) => setDescription(value || '')}
+                  preview="live"
+                  hideToolbar={false}
+                  visibleDragbar={false}
+                  height={300}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-column">Column</Label>
+                <Select value={columnId} onValueChange={setColumnId}>
+                  <SelectTrigger id="edit-column">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {board.columns.map((col) => (
+                      <SelectItem key={col.id} value={col.id}>
+                        {col.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-project">Project</Label>
+                <Select value={projectId || 'none'} onValueChange={(value) => setProjectId(value === 'none' ? '' : value)}>
+                  <SelectTrigger id="edit-project">
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {board.projects?.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-context">Context</Label>
+                <Select value={context || 'none'} onValueChange={(value) => setContext(value === 'none' ? '' : (value as TaskContext))}>
+                  <SelectTrigger id="edit-context">
+                    <SelectValue placeholder="Select context" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="EMAIL">Email</SelectItem>
+                    <SelectItem value="MEETING">Meeting</SelectItem>
+                    <SelectItem value="PHONE">Phone</SelectItem>
+                    <SelectItem value="READ">Read</SelectItem>
+                    <SelectItem value="WATCH">Watch</SelectItem>
+                    <SelectItem value="DESK">Desk</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-dueAt">Due Date</Label>
+                <Input
+                  id="edit-dueAt"
+                  type="datetime-local"
+                  value={dueAt}
+                  onChange={(e) => setDueAt(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-waitingFor">Waiting For</Label>
+              <Input
+                id="edit-waitingFor"
+                value={waitingFor}
+                onChange={(e) => setWaitingFor(e.target.value)}
+                placeholder="Who or what are you waiting for?"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-priority">Priority</Label>
+                <Select value={priority || 'none'} onValueChange={(value) => setPriority(value === 'none' ? '' : (value as TaskPriority))}>
+                  <SelectTrigger id="edit-priority">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-duration">Duration</Label>
+                <Input
+                  id="edit-duration"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  placeholder="e.g., 30 minutes, 2 hours"
+                />
+              </div>
+            </div>
+            <Separator />
+            <HintsPanel taskId={task.id} onHintApplied={onUpdate} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleSave} disabled={loading}>
+                {loading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground">Title</Label>
+              <p className="text-base font-semibold mt-1">{task.title}</p>
+            </div>
+            {task.description && (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                <div className="mt-1" data-color-mode="light">
+                  <ReactMarkdown source={task.description} />
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Column</Label>
+                <p className="text-base mt-1">{task.column?.name || 'Unknown'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Project</Label>
+                <p className="text-base mt-1">{task.project?.name || 'None'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Context</Label>
+                <p className="text-base mt-1">{task.context || 'None'}</p>
+              </div>
+              {task.dueAt && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Due Date</Label>
+                  <p className="text-base mt-1 flex items-center gap-2">
+                    <Calendar className="size-4" />
+                    {new Date(task.dueAt).toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
+            {task.waitingFor && (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Waiting For</Label>
+                <p className="text-base mt-1">{task.waitingFor}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              {task.priority && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Priority</Label>
+                  <p className="text-base mt-1">
+                    <Badge variant={task.priority === 'HIGH' ? 'destructive' : task.priority === 'MEDIUM' ? 'default' : 'secondary'}>
+                      {task.priority}
+                    </Badge>
+                  </p>
+                </div>
+              )}
+              {task.duration && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Duration</Label>
+                  <p className="text-base mt-1">{task.duration}</p>
+                </div>
+              )}
+            </div>
+            {task.tags && task.tags.length > 0 && (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Tags</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {task.tags.map(({ tag }) => (
+                    <Badge key={tag.id} variant="secondary">
+                      {tag.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {task.checklist && task.checklist.length > 0 && (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Checklist</Label>
+                <div className="space-y-2 mt-1">
+                  {task.checklist.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <CheckCircle2
+                        className={cn('size-4', item.isDone ? 'text-green-500' : 'text-slate-400')}
+                      />
+                      <span className={cn(item.isDone && 'line-through text-muted-foreground')}>
+                        {item.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Separator />
+            <HintsPanel taskId={task.id} onHintApplied={onUpdate} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Draggable Task Card Component
+interface DraggableTaskCardProps {
+  task: Task;
+  onTaskClick?: (task: Task) => void;
+}
+
+function DraggableTaskCard({ task, onTaskClick }: DraggableTaskCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getPriorityColor = (): 'indigo' | 'amber' | 'green' | 'rose' | 'slate' => {
+    if (task.tags && task.tags.length > 0) {
+      const tag = task.tags[0].tag;
+      if (tag.color) {
+        if (tag.color.includes('red') || tag.color.includes('rose')) return 'rose';
+        if (tag.color.includes('amber') || tag.color.includes('yellow')) return 'amber';
+        if (tag.color.includes('green')) return 'green';
+        if (tag.color.includes('indigo') || tag.color.includes('blue')) return 'indigo';
+      }
+    }
+    if (task.stale) return 'rose';
+    if (task.isDone) return 'green';
+    return 'slate';
+  };
+
+  const priorityColor = getPriorityColor();
+  const priority = task.tags?.[0]?.tag?.name || (task.stale ? 'Stale' : 'Normal');
+
+  const colorMap = {
+    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
+    amber: { bg: 'bg-amber-50', text: 'text-amber-500' },
+    green: { bg: 'bg-green-50', text: 'text-green-500' },
+    rose: { bg: 'bg-rose-50', text: 'text-rose-500' },
+    slate: { bg: 'bg-slate-50', text: 'text-slate-600' },
+  };
+
+  const colors = colorMap[priorityColor];
+  const comments = task.metadata?.comments as number || 0;
+  const checkmarks = task.checklist?.filter(item => item.isDone).length || 0;
+  const totalCheckmarks = task.checklist?.length || 0;
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} className="w-full">
+      <Card
+        className="bg-white border border-slate-200 border-solid relative rounded-3xl shrink-0 w-full cursor-pointer hover:shadow-md transition-shadow"
+        onClick={() => onTaskClick?.(task)}
+      >
+        <div className="box-border flex flex-col gap-4 items-start overflow-clip p-3 relative rounded-[inherit] w-full">
+          <div className="flex items-start gap-2 w-full">
+            <button
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
+              type="button"
+            >
+              <GripVertical className="size-4" />
+            </button>
+            <div className="flex flex-col gap-3 items-start relative shrink-0 flex-1">
+              <div className={cn(colors.bg, 'box-border flex gap-1 items-center justify-center overflow-clip px-2 py-1 relative rounded-[1234px] shrink-0')}>
+                <p className={cn('font-semibold leading-4 relative shrink-0 text-xs text-center whitespace-pre', colors.text)}>
+                  {priority}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 items-start relative shrink-0 text-base w-full">
+                <p className="font-bold leading-[22px] relative shrink-0 text-slate-800 w-full">
+                  {task.title}
+                </p>
+                {task.description && (
+                  <p className="font-normal leading-[1.6] relative shrink-0 text-slate-600 w-full line-clamp-2">
+                    {task.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-4 items-center relative shrink-0 w-full">
+            <div className="basis-0 box-border flex grow items-start min-h-px min-w-px pl-0 pr-2 py-0 relative shrink-0">
+              <Avatar className="border-2 border-solid border-white relative rounded-full shrink-0 size-8">
+                <AvatarFallback className="bg-indigo-100 text-indigo-600 text-xs">
+                  {task.ownerId.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="flex gap-4 items-start relative shrink-0">
+              {comments > 0 && (
+                <div className="flex gap-1 items-center relative shrink-0">
+                  <MessageCircle className="relative shrink-0 size-4 text-slate-400" />
+                  <p className="font-semibold leading-[22px] relative shrink-0 text-base text-center whitespace-pre text-slate-800">
+                    {comments}
+                  </p>
+                </div>
+              )}
+              {totalCheckmarks > 0 && (
+                <div className="flex gap-1 items-center relative shrink-0">
+                  <CheckCircle2 className="relative shrink-0 size-4 text-slate-400" />
+                  <p className="font-semibold leading-[22px] relative shrink-0 text-base text-center whitespace-pre text-slate-800">
+                    {checkmarks}/{totalCheckmarks}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// KanbanActionButton Component
+interface KanbanActionButtonProps {
+  column: Column;
+  taskCount: number;
+  onAddTask: () => void;
+}
+
+function KanbanActionButton({ column, taskCount, onAddTask }: KanbanActionButtonProps) {
+  const getStateFromColumn = (type: Column['type']): 'In Progress' | 'Reviewed' | 'Completed' => {
+    if (type === 'DONE' || type === 'ARCHIVE') return 'Completed';
+    if (type === 'CLARIFY') return 'Reviewed';
+    return 'In Progress';
+  };
+
+  const state = getStateFromColumn(column.type);
+  const colors = {
+    'In Progress': { bg: 'bg-indigo-600', text: 'text-white', badge: 'text-indigo-600' },
+    Reviewed: { bg: 'bg-amber-500', text: 'text-white', badge: 'text-amber-500' },
+    Completed: { bg: 'bg-green-500', text: 'text-white', badge: 'text-green-500' },
+  };
+  const color = colors[state];
+  const displayName = column.name || state;
+
+  return (
+    <button
+      type="button"
+      className={cn(color.bg, 'box-border flex gap-3 items-center pl-2 pr-3 py-2 relative rounded-full shrink-0 w-full cursor-pointer hover:opacity-90 transition-opacity')}
+      onClick={onAddTask}
+    >
+      <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
+        <div className="bg-white box-border flex gap-2 items-center justify-center overflow-clip px-3 py-1.5 relative rounded-[1234px] shrink-0">
+          <p className={cn('font-semibold leading-5 relative shrink-0 text-sm text-center whitespace-pre', color.badge)}>
+            {taskCount}
+          </p>
+        </div>
+        <p className={cn('basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base', color.text)}>
+          {displayName}
+        </p>
+      </div>
+      <Plus className={cn('relative shrink-0 size-6', color.text)} />
+    </button>
+  );
+}
+
+// Droppable Kanban Column Component
+interface KanbanColumnProps {
+  column: Column;
+  tasks: Task[];
+  onAddTask: (columnId: string) => void;
+  onTaskClick?: (task: Task) => void;
+}
+
+function KanbanColumn({ column, tasks, onAddTask, onTaskClick }: KanbanColumnProps) {
+  const taskCount = tasks.length;
+  const wipLimit = column.wipLimit ?? null;
+  const isAtLimit = wipLimit !== null && taskCount >= wipLimit;
+  const taskIds = tasks.map((t) => t.id);
+
+  // Make the column a droppable area
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'basis-0 bg-slate-50 box-border flex gap-2.5 grow items-start min-h-px min-w-px overflow-clip p-3 relative rounded-[32px] shrink-0 min-h-[400px] transition-colors',
+        isOver && 'bg-indigo-50 border-2 border-indigo-300 border-dashed'
+      )}
+    >
+      <div className="basis-0 flex flex-col gap-4 grow items-start min-h-px min-w-px relative shrink-0 w-full">
+        <KanbanActionButton
+          column={column}
+          taskCount={taskCount}
+          onAddTask={() => onAddTask(column.id)}
+        />
+        {isAtLimit && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-full">
+            <p className="text-xs text-amber-700 font-medium">
+              WIP Limit: {taskCount}/{wipLimit}
+            </p>
+          </div>
+        )}
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          <div className="flex flex-col gap-3 items-start relative shrink-0 w-full min-h-[200px]">
+            {tasks.length === 0 ? (
+              <div className={cn(
+                'text-center text-slate-400 text-sm py-8 w-full rounded-lg border-2 border-dashed transition-colors',
+                isOver ? 'border-indigo-300 bg-indigo-50/50' : 'border-transparent'
+              )}>
+                {isOver ? 'Drop task here' : 'No tasks'}
+              </div>
+            ) : (
+              tasks.map((task) => (
+                <DraggableTaskCard key={task.id} task={task} onTaskClick={onTaskClick} />
+              ))
+            )}
+          </div>
+        </SortableContext>
+      </div>
+    </div>
+  );
+}
+
+// Main BoardView Component with all features
+export function BoardView() {
+  const { boardId } = useParams<{ boardId: string }>();
+  const [activeTab, setActiveTab] = useState('By Total Tasks');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const [board, setBoard] = useState<Board | null>(null);
+  const [loadingBoard, setLoadingBoard] = useState(true);
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+  const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Fetch board data
+  useEffect(() => {
+    if (!boardId) {
+      setBoardError('Board ID is required');
+      setLoadingBoard(false);
+      return;
+    }
+
+    const loadBoard = async () => {
+      setLoadingBoard(true);
+      setBoardError(null);
+      try {
+        const boardData = await fetchBoardById(boardId);
+        setBoard(boardData);
+      } catch (err) {
+        setBoardError(err instanceof Error ? err.message : 'Failed to load board');
+        toast.error('Failed to load board');
+      } finally {
+        setLoadingBoard(false);
+      }
     };
 
-    return (
-        <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-        }} onClick={onClose}>
-            <div style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '16px',
-                padding: '24px',
-                width: '90%',
-                maxWidth: '500px',
-                boxShadow: '0px 10px 40px rgba(0, 0, 0, 0.2)',
-            }} onClick={(e) => e.stopPropagation()}>
-                <h2 style={{
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    color: '#1E293B',
-                    marginBottom: '16px',
-                }}>Create New Task</h2>
-                <form onSubmit={handleSubmit}>
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{
-                            display: 'block',
-                            fontFamily: "'Plus Jakarta Sans', sans-serif",
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            color: '#475569',
-                            marginBottom: '8px',
-                        }}>Title *</label>
-                        <Input
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            placeholder="Enter task title"
-                            required
-                            autoFocus
-                        />
-                    </div>
-                    <div style={{ marginBottom: '24px' }}>
-                        <label style={{
-                            display: 'block',
-                            fontFamily: "'Plus Jakarta Sans', sans-serif",
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            color: '#475569',
-                            marginBottom: '8px',
-                        }}>Description</label>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Enter task description (optional)"
-                            style={{
-                                width: '100%',
-                                minHeight: '100px',
-                                padding: '12px',
-                                border: '1px solid #E2E8F0',
-                                borderRadius: '8px',
-                                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                fontSize: '14px',
-                                resize: 'vertical',
-                            }}
-                        />
-                    </div>
-                    <div style={{
-                        display: 'flex',
-                        gap: '12px',
-                        justifyContent: 'flex-end',
-                    }}>
-                        <Button
-                            type="button"
-                            size="md"
-                            color="secondary"
-                            onClick={onClose}
-                            isDisabled={loading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="submit"
-                            size="md"
-                            color="primary"
-                            isDisabled={loading || !title.trim()}
-                            isLoading={loading}
-                        >
-                            Create Task
-                        </Button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}
+    loadBoard();
+  }, [boardId]);
 
-export function BoardView() {
-    const { boardId } = useParams<{ boardId: string }>();
-    const navigate = useNavigate();
-    const [board, setBoard] = useState<Board | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [activeTask, setActiveTask] = useState<Task | null>(null);
-    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-    const [overColumnId, setOverColumnId] = useState<string | null>(null);
-    const [wipWarning, setWipWarning] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showSearch, setShowSearch] = useState(false);
-    const [createTaskColumnId, setCreateTaskColumnId] = useState<string | null>(null);
-    const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  // Use tasks hook
+  const { tasks, loading: loadingTasks, error: tasksError, moveTask, deleteTask, refresh: refreshTasks } = useTasks(boardId || null);
 
-    const { tasks, loading: tasksLoading, error: tasksError, moveTask, refresh } = useTasks(board?.id || null);
-    const { users } = useUsers();
+  // Real-time updates
+  useBoardRealtime(
+    boardId ? [boardId] : [],
+    useCallback(() => {
+      refreshTasks();
+      if (boardId) {
+        fetchBoardById(boardId).then(setBoard).catch(console.error);
+      }
+    }, [boardId, refreshTasks])
+  );
 
-    useBoardRealtime(
-        board ? [board.id] : [],
-        refresh,
-    );
+  // Filter and sort tasks based on activeTab
+  const filteredAndSortedTasks = useMemo(() => {
+    if (!tasks) return [];
 
-    const sensors = useSensors(
-        useSensor(MouseSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-        useSensor(TouchSensor, {
-            activationConstraint: {
-                delay: 200,
-                tolerance: 5,
-            },
-        })
-    );
+    let filtered = [...tasks];
 
-    useEffect(() => {
-        if (!boardId) {
-            navigate('/', { replace: true });
-            return;
-        }
+    // Filter by tab
+    switch (activeTab) {
+      case 'By Status':
+        // Show all tasks
+        break;
+      case 'By Total Tasks':
+        // Show all tasks
+        break;
+      case 'Tasks Due':
+        filtered = filtered.filter((task) => task.dueAt && new Date(task.dueAt) > new Date());
+        break;
+      case 'Extra Tasks':
+        // Tasks that exceed WIP limits or are in wrong columns
+        filtered = filtered.filter((task) => {
+          const column = board?.columns.find((c) => c.id === task.columnId);
+          if (!column || !column.wipLimit) return false;
+          const columnTasks = tasks.filter((t) => t.columnId === column.id);
+          return columnTasks.length > column.wipLimit;
+        });
+        break;
+      case 'Tasks Completed':
+        filtered = filtered.filter((task) => task.isDone);
+        break;
+    }
 
-        setLoading(true);
-        setError(null);
+    // Sort tasks
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.lastMovedAt).getTime() - new Date(a.lastMovedAt).getTime();
+        case 'oldest':
+          return new Date(a.lastMovedAt).getTime() - new Date(b.lastMovedAt).getTime();
+        case 'title':
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
+      }
+    });
 
-        fetchBoardById(boardId)
-            .then((data) => {
-                setBoard(data);
-            })
-            .catch((err) => {
-                setError(err instanceof Error ? err.message : 'Failed to load board');
-                if (err instanceof Error && err.message.includes('404')) {
-                    setTimeout(() => navigate('/', { replace: true }), 2000);
-                }
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    }, [boardId, navigate]);
+    return filtered;
+  }, [tasks, activeTab, sortBy, board]);
 
-    // Get unique users from tasks
-    const boardUsers = useMemo(() => {
-        if (!tasks.length || !users.length) return [];
-        const uniqueOwnerIds = new Set(tasks.map(t => t.ownerId));
-        return users.filter(u => uniqueOwnerIds.has(u.id)).slice(0, 7);
-    }, [tasks, users]);
+  // Group tasks by column
+  const tasksByColumn = useMemo(() => {
+    if (!board) return new Map<string, Task[]>();
 
-    // Get primary project from board (first project or most used)
-    const primaryProject = useMemo(() => {
-        if (!board?.projects || board.projects.length === 0) return null;
-        if (selectedProject) {
-            return board.projects.find(p => p.id === selectedProject);
-        }
-        // Find project with most tasks
-        const projectTaskCounts = board.projects.map(project => ({
-            project,
-            count: tasks.filter(t => t.projectId === project.id).length,
-        }));
-        projectTaskCounts.sort((a, b) => b.count - a.count);
-        return projectTaskCounts[0]?.project || board.projects[0];
-    }, [board?.projects, tasks, selectedProject]);
+    const map = new Map<string, Task[]>();
+    for (const col of board.columns) {
+      map.set(col.id, []);
+    }
 
-    // Filter tasks by search query and project
-    const filteredTasks = useMemo(() => {
-        let filtered = tasks;
-        
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(task =>
-                task.title.toLowerCase().includes(query) ||
-                task.description?.toLowerCase().includes(query)
-            );
-        }
+    for (const task of filteredAndSortedTasks) {
+      const columnTasks = map.get(task.columnId) || [];
+      columnTasks.push(task);
+      map.set(task.columnId, columnTasks);
+    }
 
-        if (selectedProject) {
-            filtered = filtered.filter(task => task.projectId === selectedProject);
-        }
+    return map;
+  }, [board, filteredAndSortedTasks]);
 
-        return filtered;
-    }, [tasks, searchQuery, selectedProject]);
+  // Get sorted columns
+  const sortedColumns = useMemo(() => {
+    if (!board) return [];
+    return [...board.columns].sort((a, b) => a.position - b.position);
+  }, [board]);
 
-    // Group filtered tasks by column
-    const tasksByColumn = useMemo(() => {
-        if (!board) return {};
-        const grouped: Record<string, Task[]> = {};
-        for (const column of board.columns) {
-            grouped[column.id] = [];
-        }
-        for (const task of filteredTasks) {
-            if (grouped[task.columnId]) {
-                grouped[task.columnId].push(task);
-            }
-        }
-        // Sort tasks within each column by lastMovedAt
-        for (const columnId of Object.keys(grouped)) {
-            grouped[columnId].sort(
-                (a, b) => new Date(a.lastMovedAt).getTime() - new Date(b.lastMovedAt).getTime()
-            );
-        }
-        return grouped;
-    }, [filteredTasks, board]);
+  // Handle creating a new task
+  const handleAddTask = useCallback((columnId: string) => {
+    setSelectedColumnId(columnId);
+    setShowCreateTaskDialog(true);
+  }, []);
 
-    const handleDragStart = useCallback((event: DragStartEvent) => {
-        const task = tasks.find((t) => t.id === event.active.id);
-        setActiveTask(task || null);
-        setWipWarning(null);
-    }, [tasks]);
+  // Handle task click
+  const handleTaskClick = useCallback((task: Task) => {
+    setSelectedTask(task);
+    setShowTaskDialog(true);
+  }, []);
 
-    const handleDragOver = useCallback((event: DragOverEvent) => {
-        const { over } = event;
-        if (!board || !over) {
-            setOverColumnId(null);
-            return;
-        }
+  // Handle drag start
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  }, []);
 
-        const overId = over.id as string;
-        const column = board.columns.find((c) => c.id === overId);
-        if (column) {
-            setOverColumnId(column.id);
+  // Handle drag end
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const targetId = over.id as string;
+
+    // Check if dropping on a column
+    const isColumn = board?.columns.some((col) => col.id === targetId);
+
+    if (isColumn) {
+      // Dropping on a column - move task to that column
+      const currentTask = tasks?.find((t) => t.id === taskId);
+      if (!currentTask || currentTask.columnId === targetId) {
+        // Already in the same column, no need to move
+        return;
+      }
+
+      try {
+        const result = await moveTask(taskId, targetId);
+        if (!result.success && result.wipStatus?.atLimit) {
+          toast.warning(`WIP limit reached for ${result.wipStatus.columnName}`);
         } else {
-            const task = tasks.find((t) => t.id === overId);
-            if (task) {
-                setOverColumnId(task.columnId);
-            }
+          toast.success('Task moved');
         }
-    }, [board, tasks]);
-
-    const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-        const { active, over } = event;
-        setActiveTask(null);
-        setOverColumnId(null);
-
-        if (!board || !over) return;
-
-        const taskId = active.id as string;
-        let targetColumnId = over.id as string;
-
-        const droppedOnTask = tasks.find((t) => t.id === targetColumnId);
-        if (droppedOnTask) {
-            targetColumnId = droppedOnTask.columnId;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to move task');
+      }
+    } else {
+      // Dropping on another task - find which column that task is in
+      const targetTask = tasks?.find((t) => t.id === targetId);
+      if (targetTask) {
+        const currentTask = tasks?.find((t) => t.id === taskId);
+        if (!currentTask || currentTask.columnId === targetTask.columnId) {
+          // Already in the same column, no need to move
+          return;
         }
-
-        const targetColumn = board.columns.find((c) => c.id === targetColumnId);
-        if (!targetColumn) return;
-
-        const task = tasks.find((t) => t.id === taskId);
-        if (!task || task.columnId === targetColumnId) return;
 
         try {
-            const result = await moveTask(taskId, targetColumnId);
-
-            if (!result.success && result.wipStatus) {
-                setWipWarning(
-                    `WIP limit reached for "${result.wipStatus.columnName}" (${result.wipStatus.currentCount}/${result.wipStatus.wipLimit}).`
-                );
-                if (confirm(`WIP limit reached for "${result.wipStatus.columnName}". Move anyway?`)) {
-                    await moveTask(taskId, targetColumnId, true);
-                    setWipWarning(null);
-                }
-            }
+          const result = await moveTask(taskId, targetTask.columnId);
+          if (!result.success && result.wipStatus?.atLimit) {
+            toast.warning(`WIP limit reached for ${result.wipStatus.columnName}`);
+          } else {
+            toast.success('Task moved');
+          }
         } catch (err) {
-            console.error('Move failed:', err);
-            setWipWarning(err instanceof Error ? err.message : 'Move failed');
+          toast.error(err instanceof Error ? err.message : 'Failed to move task');
         }
-    }, [board, tasks, moveTask]);
-
-    const handleDragCancel = useCallback(() => {
-        setActiveTask(null);
-        setOverColumnId(null);
-    }, []);
-
-    // Sort columns by position
-    const sortedColumns = useMemo(
-        () => board ? [...board.columns].sort((a, b) => a.position - b.position) : [],
-        [board]
-    );
-
-    // Export to CSV
-    const handleExport = useCallback(() => {
-        if (!board || !tasks.length) return;
-
-        const headers = ['Title', 'Description', 'Column', 'Project', 'Status', 'Created', 'Updated'];
-        const rows = tasks.map(task => [
-            task.title,
-            task.description || '',
-            board.columns.find(c => c.id === task.columnId)?.name || '',
-            task.project?.name || '',
-            task.isDone ? 'Done' : 'Active',
-            new Date(task.createdAt).toLocaleDateString(),
-            new Date(task.updatedAt).toLocaleDateString(),
-        ]);
-
-        const csvContent = [
-            headers.join(','),
-            ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${board.name.replace(/[^a-z0-9]/gi, '_')}_tasks.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }, [board, tasks]);
-
-    // Get user initials
-    const getUserInitials = useCallback((user: { name?: string; email: string }) => {
-        if (user.name) {
-            const parts = user.name.split(' ');
-            if (parts.length >= 2) {
-                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-            }
-            return user.name.substring(0, 2).toUpperCase();
-        }
-        return user.email.substring(0, 2).toUpperCase();
-    }, []);
-
-    if (loading || !board) {
-        return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                width: '100vw',
-                height: '100vh',
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                background: '#FFFFFF',
-            }}>
-                <p style={{ color: '#475569' }}>Loading board…</p>
-            </div>
-        );
+      }
     }
+  }, [moveTask, board, tasks]);
 
-    if (error) {
-        return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                width: '100vw',
-                height: '100vh',
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                background: '#FFFFFF',
-            }}>
-                <div style={{ textAlign: 'center' }}>
-                    <h1 style={{ color: '#1E293B', fontSize: '24px', marginBottom: '8px' }}>Error Loading Board</h1>
-                    <p style={{ color: '#475569' }}>{error}</p>
-                    <Button size="md" color="primary" onClick={() => navigate('/')} style={{ marginTop: '16px' }}>
-                        ← Back to Home
-                    </Button>
-                </div>
-            </div>
-        );
-    }
+  // Handle drag over (for visual feedback)
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    // Can add visual feedback here if needed
+  }, []);
 
+  // Get active task for drag overlay
+  const activeTask = useMemo(() => {
+    if (!activeId) return null;
+    return tasks?.find((t) => t.id === activeId) || null;
+  }, [activeId, tasks]);
+
+  // Loading state
+  if (loadingBoard || loadingTasks) {
     return (
-        <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            padding: '0px',
-            width: '100vw',
-            height: '100vh',
-            overflow: 'hidden',
-            background: '#FFFFFF',
-            fontFamily: "'Plus Jakarta Sans', sans-serif",
-            position: 'fixed',
-            top: 0,
-            left: 0,
-        }}>
-            {/* Header Section */}
-            <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                padding: '0px',
-                width: '100%',
-                flexShrink: 0,
-            }}>
-                {/* Top Bar */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    padding: '20px 32px',
-                    gap: '10px',
-                    width: '100%',
-                    background: '#F8FAFC',
-                }}>
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: '0px',
-                        gap: '16px',
-                        width: '100%',
-                    }}>
-                        {/* Breadcrumbs */}
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            padding: '0px',
-                            gap: '8px',
-                            flex: 1,
-                        }}>
-                            {/* Home icon */}
-                            <Link to="/" style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                padding: '16px',
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '123px',
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                textDecoration: 'none',
-                            }}>
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <path d="M10 3L3 10H6V17H9V13H11V17H14V10H17L10 3Z" fill="#475569" />
-                                </svg>
-                            </Link>
-                            
-                            {/* Breadcrumb items */}
-                            <span style={{ color: '#CBD5E1', fontSize: '20px' }}>›</span>
-                            <Link to="/" style={{
-                                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                fontStyle: 'normal',
-                                fontWeight: 700,
-                                fontSize: '14px',
-                                lineHeight: '20px',
-                                color: '#475569',
-                                textDecoration: 'none',
-                            }}>Boards</Link>
-                            
-                            {primaryProject && (
-                                <>
-                                    <span style={{ color: '#CBD5E1', fontSize: '20px' }}>›</span>
-                                    <span style={{
-                                        fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                        fontStyle: 'normal',
-                                        fontWeight: 700,
-                                        fontSize: '14px',
-                                        lineHeight: '20px',
-                                        color: '#475569',
-                                    }}>Projects</span>
-                                    <span style={{ color: '#CBD5E1', fontSize: '20px' }}>›</span>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                    }}>
-                                        <div style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            borderRadius: '50%',
-                                            background: '#4F46E5',
-                                        }} />
-                                        <span style={{
-                                            fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                            fontStyle: 'normal',
-                                            fontWeight: 700,
-                                            fontSize: '14px',
-                                            lineHeight: '20px',
-                                            color: '#4F46E5',
-                                        }}>{primaryProject.name}</span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="size-8 animate-spin text-indigo-600" />
+          <p className="text-slate-600">Loading board...</p>
+        </div>
+      </div>
+    );
+  }
 
-                        {/* Right side buttons */}
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'row',
-                            alignItems: 'flex-start',
-                            padding: '0px',
-                            gap: '8px',
-                        }}>
-                            {/* Search button */}
-                            <button 
-                                onClick={() => setShowSearch(!showSearch)}
-                                style={{
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    padding: '16px',
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '123px',
-                                    border: 'none',
-                                    background: showSearch ? '#E2E8F0' : 'transparent',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                <SearchLg className="w-6 h-6" style={{ color: '#475569' }} />
-                            </button>
+  // Error state
+  if (boardError || tasksError || !board) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <AlertCircle className="size-8 text-red-500" />
+          <p className="text-slate-600">{boardError || tasksError || 'Board not found'}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
-                            {/* Search input (shown when active) */}
-                            {showSearch && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '80px',
-                                    right: '32px',
-                                    zIndex: 100,
-                                    background: '#FFFFFF',
-                                    border: '1px solid #E2E8F0',
-                                    borderRadius: '8px',
-                                    padding: '8px',
-                                    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
-                                    minWidth: '300px',
-                                }}>
-                                    <Input
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Search tasks..."
-                                        autoFocus
-                                    />
-                                </div>
-                            )}
+  return (
+    <SidebarProvider defaultOpen={true}>
+      <BoardViewContent
+        boardId={boardId}
+        board={board}
+        handleAddTask={handleAddTask}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        sortedColumns={sortedColumns}
+        tasksByColumn={tasksByColumn}
+        sensors={sensors}
+        handleDragStart={handleDragStart}
+        handleDragEnd={handleDragEnd}
+        handleDragOver={handleDragOver}
+        handleTaskClick={handleTaskClick}
+        activeTask={activeTask}
+        showCreateTaskDialog={showCreateTaskDialog}
+        setShowCreateTaskDialog={setShowCreateTaskDialog}
+        selectedColumnId={selectedColumnId}
+        refreshTasks={refreshTasks}
+        showTaskDialog={showTaskDialog}
+        setShowTaskDialog={setShowTaskDialog}
+        selectedTask={selectedTask}
+        deleteTask={deleteTask}
+        filteredAndSortedTasks={filteredAndSortedTasks}
+      />
+    </SidebarProvider>
+  );
+}
 
-                            {/* Avatar group */}
-                            {boardUsers.length > 0 && (
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                    alignItems: 'flex-start',
-                                    padding: '0px',
-                                }}>
-                                    {boardUsers.slice(0, 6).map((user, index) => (
-                                        <div
-                                            key={user.id}
-                                            style={{
-                                                width: '40px',
-                                                height: '40px',
-                                                borderRadius: '76.875px',
-                                                border: '2px solid #FFFFFF',
-                                                background: '#E0E7FF',
-                                                marginLeft: index > 0 ? '-12px' : '0',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                                fontWeight: 700,
-                                                fontSize: '12px',
-                                                color: '#4F46E5',
-                                                zIndex: boardUsers.length - index,
-                                                position: 'relative',
-                                            }}
-                                            title={user.name || user.email}
-                                        >
-                                            {getUserInitials(user)}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+// Inner component that uses SidebarProvider context
+function BoardViewContent({
+  boardId,
+  board,
+  handleAddTask,
+  activeTab,
+  setActiveTab,
+  sortBy,
+  setSortBy,
+  sortedColumns,
+  tasksByColumn,
+  sensors,
+  handleDragStart,
+  handleDragEnd,
+  handleDragOver,
+  handleTaskClick,
+  activeTask,
+  showCreateTaskDialog,
+  setShowCreateTaskDialog,
+  selectedColumnId,
+  refreshTasks,
+  showTaskDialog,
+  setShowTaskDialog,
+  selectedTask,
+  deleteTask,
+  filteredAndSortedTasks,
+}: {
+  boardId: string | undefined;
+  board: Board | null;
+  handleAddTask: (columnId: string) => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  sortBy: 'newest' | 'oldest' | 'title';
+  setSortBy: (sort: 'newest' | 'oldest' | 'title') => void;
+  sortedColumns: Column[];
+  tasksByColumn: Map<string, Task[]>;
+  sensors: ReturnType<typeof useSensors>;
+  handleDragStart: (event: DragStartEvent) => void;
+  handleDragEnd: (event: DragEndEvent) => Promise<void>;
+  handleDragOver: (event: DragOverEvent) => void;
+  handleTaskClick: (task: Task) => void;
+  activeTask: Task | null;
+  showCreateTaskDialog: boolean;
+  setShowCreateTaskDialog: (open: boolean) => void;
+  selectedColumnId: string | null;
+  refreshTasks: () => void;
+  showTaskDialog: boolean;
+  setShowTaskDialog: (open: boolean) => void;
+  selectedTask: Task | null;
+  deleteTask: (taskId: string) => void;
+  filteredAndSortedTasks: Task[];
+}) {
+  const { open } = useSidebar();
 
-                            {/* Filter button */}
-                            <button 
-                                onClick={() => {
-                                    if (selectedProject) {
-                                        setSelectedProject(null);
-                                    } else if (board.projects && board.projects.length > 0) {
-                                        // Could open a filter menu here
-                                        setSelectedProject(board.projects[0].id);
-                                    }
-                                }}
-                                style={{
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    padding: '10px 16px',
-                                    gap: '8px',
-                                    minWidth: '98px',
-                                    height: '40px',
-                                    border: '1px solid #CBD5E1',
-                                    borderRadius: '1234px',
-                                    background: selectedProject ? '#4F46E5' : '#FFFFFF',
-                                    cursor: 'pointer',
-                                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                    fontWeight: 700,
-                                    fontSize: '14px',
-                                    lineHeight: '20px',
-                                    color: selectedProject ? '#FFFFFF' : '#475569',
-                                }}
-                            >
-                                {selectedProject ? 'Clear Filter' : 'Filter'}
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <path d="M3 7h14M7 3v14m6-14v14" stroke={selectedProject ? '#FFFFFF' : '#475569'} strokeWidth="2" />
-                                </svg>
-                            </button>
-                        </div>
+  return (
+    <div className="flex h-screen w-full overflow-hidden">
+      {open && <AppSidebar boardId={boardId} />}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <SiteHeader board={board} onAddTask={handleAddTask} />
+        <div className="flex flex-1 flex-col overflow-auto">
+          {/* Tabs Section */}
+          <div className="border-b bg-slate-50/50">
+            <div className="flex items-center justify-between px-4 lg:px-6">
+              <div className="flex items-center gap-2">
+                {['By Status', 'By Total Tasks', 'Tasks Due', 'Extra Tasks', 'Tasks Completed'].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      'border-b-2 min-h-12 px-4 py-3 relative shrink-0 transition-colors',
+                      activeTab === tab
+                        ? 'border-indigo-600 text-slate-800'
+                        : 'border-transparent text-slate-600 hover:text-slate-800'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm whitespace-nowrap">
+                        {tab}
+                      </span>
+                      {tab === 'By Total Tasks' && (
+                        <Badge variant="secondary" className="text-xs">
+                          {filteredAndSortedTasks.length}
+                        </Badge>
+                      )}
                     </div>
-                </div>
-
-                {/* Board Header */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    padding: '32px',
-                    gap: '16px',
-                    width: '100%',
-                    borderBottom: '1px solid #E2E8F0',
-                }}>
-                    {/* Logo Placeholder */}
-                    <div style={{
-                        width: '96px',
-                        height: '96px',
-                        background: '#E0E7FF',
-                        borderRadius: '1234px',
-                        position: 'relative',
-                        flexShrink: 0,
-                    }}>
-                        <div style={{
-                            position: 'absolute',
-                            width: '64px',
-                            height: '64px',
-                            left: '50%',
-                            top: '50%',
-                            transform: 'translate(-50%, -50%)',
-                            background: '#4F46E5',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#FFFFFF',
-                            fontFamily: "'Plus Jakarta Sans', sans-serif",
-                            fontWeight: 800,
-                            fontSize: '24px',
-                        }}>
-                            {board.name.substring(0, 1).toUpperCase()}
-                        </div>
-                    </div>
-
-                    {/* Title and Actions */}
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        padding: '0px',
-                        gap: '12px',
-                        flex: 1,
-                    }}>
-                        {/* Title Row */}
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            padding: '0px',
-                            gap: '16px',
-                            width: '100%',
-                        }}>
-                            <h1 style={{
-                                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                fontStyle: 'normal',
-                                fontWeight: 800,
-                                fontSize: '30px',
-                                lineHeight: '38px',
-                                letterSpacing: '-0.013em',
-                                color: '#1E293B',
-                                margin: 0,
-                                flex: 1,
-                            }}>
-                                {board.name}
-                            </h1>
-                        </div>
-
-                        {/* Tabs */}
-                        <div style={{
-                            display: 'flex',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            padding: '0px',
-                            gap: '64px',
-                            width: '100%',
-                        }}>
-                            <Tabs selectedKey="board" onSelectionChange={() => { }}>
-                                <Tabs.List
-                                    type="button-border"
-                                    size="sm"
-                                    items={[
-                                        { id: 'board', label: 'Board' },
-                                        { id: 'list', label: 'List' },
-                                    ]}
-                                >
-                                    {(item) => <Tabs.Item id={item.id}>{item.label}</Tabs.Item>}
-                                </Tabs.List>
-                            </Tabs>
-
-                            {/* Export button */}
-                            <Button
-                                size="md"
-                                color="primary"
-                                onClick={handleExport}
-                            >
-                                Export
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-600">Sort By</span>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as 'newest' | 'oldest' | 'title')}>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest</SelectItem>
+                    <SelectItem value="oldest">Oldest</SelectItem>
+                    <SelectItem value="title">Title</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+          </div>
 
-            {/* Main Content Area */}
-            <DndContext
+          {/* Kanban Board with DnD */}
+          <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
+            {sortedColumns.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-slate-400">No columns found</p>
+              </div>
+            ) : (
+              <DndContext
                 sensors={sensors}
                 collisionDetection={closestCorners}
                 onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
-                onDragCancel={handleDragCancel}
-            >
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    padding: '32px',
-                    gap: '24px',
-                    width: '100%',
-                    flex: 1,
-                    overflowX: 'auto',
-                    overflowY: 'hidden',
-                    minHeight: 0,
-                }}>
-                    {sortedColumns.map((column) => {
-                        const columnTasks = tasksByColumn[column.id] || [];
-                        const taskCount = columnTasks.length;
-
-                        // Get column dot color based on type
-                        const getDotColor = () => {
-                            if (column.type === 'DONE') return '#22C55E';
-                            if (column.type === 'INPUT') return '#4F46E5';
-                            if (column.name.toLowerCase().includes('progress')) return '#F59E0B';
-                            return '#4F46E5';
-                        };
-
-                        const ColumnDroppable = ({ children }: { children: ReactNode }) => {
-                            const { setNodeRef } = useDroppable({
-                                id: column.id,
-                            });
-
-                            return (
-                                <div
-                                    ref={setNodeRef}
-                                    style={{
-                                        boxSizing: 'border-box',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'flex-start',
-                                        padding: '16px',
-                                        gap: '10px',
-                                        width: '416px',
-                                        minWidth: '416px',
-                                        flexShrink: 0,
-                                        background: '#F8FAFC',
-                                        border: '1px solid #E2E8F0',
-                                        borderRadius: '32px',
-                                        opacity: overColumnId === column.id ? 0.8 : 1,
-                                        transition: 'opacity 0.2s',
-                                    }}
-                                >
-                                    {children}
-                                </div>
-                            );
-                        };
-
-                        return (
-                            <ColumnDroppable key={column.id}>
-                                {/* Column Header */}
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    padding: '0px',
-                                    gap: '16px',
-                                    width: '100%',
-                                }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        padding: '0px',
-                                        gap: '8px',
-                                        flex: 1,
-                                    }}>
-                                        {/* Dot indicator */}
-                                        <div style={{
-                                            width: '10px',
-                                            height: '10px',
-                                            position: 'relative',
-                                        }}>
-                                            <div style={{
-                                                position: 'absolute',
-                                                left: '10%',
-                                                right: '10%',
-                                                top: '10%',
-                                                bottom: '10%',
-                                                background: getDotColor(),
-                                                borderRadius: '9999px',
-                                            }} />
-                                        </div>
-                                        {/* Column title */}
-                                        <h3 style={{
-                                            fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                            fontStyle: 'normal',
-                                            fontWeight: 800,
-                                            fontSize: '20px',
-                                            lineHeight: '28px',
-                                            letterSpacing: '-0.01em',
-                                            color: '#1E293B',
-                                            margin: 0,
-                                            flex: 1,
-                                        }}>
-                                            {column.name} ({taskCount})
-                                        </h3>
-                                    </div>
-
-                                    {/* Add button */}
-                                    <button 
-                                        onClick={() => setCreateTaskColumnId(column.id)}
-                                        style={{
-                                            boxSizing: 'border-box',
-                                            display: 'flex',
-                                            flexDirection: 'row',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                            padding: '16px',
-                                            width: '40px',
-                                            height: '40px',
-                                            border: '1px solid #CBD5E1',
-                                            borderRadius: '123px',
-                                            background: '#FFFFFF',
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                                            <path 
-                                                d="M12 5V19M5 12H19" 
-                                                stroke="#475569" 
-                                                strokeWidth="2" 
-                                                strokeLinecap="round"
-                                            />
-                                        </svg>
-                                    </button>
-                                </div>
-
-                                {/* Tasks Container */}
-                                <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                                    <div style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'flex-start',
-                                        padding: '0px',
-                                        gap: '12px',
-                                        width: '100%',
-                                        maxHeight: 'calc(100vh - 400px)',
-                                        overflowY: 'auto',
-                                        overflowX: 'hidden',
-                                    }}>
-                                        {columnTasks.map((task) => (
-                                            <div
-                                                key={task.id}
-                                                onClick={() => setSelectedTaskId(task.id)}
-                                                style={{
-                                                    boxSizing: 'border-box',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'flex-start',
-                                                    padding: '12px',
-                                                    gap: '16px',
-                                                    width: '100%',
-                                                    background: '#FFFFFF',
-                                                    border: '1px solid #E2E8F0',
-                                                    borderRadius: '24px',
-                                                    boxShadow: '0px 4px 8px -2px rgba(23, 23, 23, 0.1), 0px 2px 4px -2px rgba(23, 23, 23, 0.06)',
-                                                    cursor: 'pointer',
-                                                    transition: 'transform 0.2s, box-shadow 0.2s',
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(-2px)';
-                                                    e.currentTarget.style.boxShadow = '0px 6px 12px -2px rgba(23, 23, 23, 0.15), 0px 4px 6px -2px rgba(23, 23, 23, 0.1)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = '0px 4px 8px -2px rgba(23, 23, 23, 0.1), 0px 2px 4px -2px rgba(23, 23, 23, 0.06)';
-                                                }}
-                                            >
-                                                <TaskCardNew task={task} onClick={() => setSelectedTaskId(task.id)} />
-                                            </div>
-                                        ))}
-                                        {columnTasks.length === 0 && (
-                                            <div style={{
-                                                padding: '24px',
-                                                textAlign: 'center',
-                                                color: '#94A3B8',
-                                                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                                fontSize: '14px',
-                                                width: '100%',
-                                            }}>
-                                                No tasks yet. Click + to add one.
-                                            </div>
-                                        )}
-                                    </div>
-                                </SortableContext>
-                            </ColumnDroppable>
-                        );
-                    })}
+                onDragOver={handleDragOver}
+              >
+                <div className="flex gap-4 items-start relative shrink-0 w-full overflow-x-auto">
+                  {sortedColumns.map((column) => {
+                    const columnTasks = tasksByColumn.get(column.id) || [];
+                    return (
+                      <KanbanColumn
+                        key={column.id}
+                        column={column}
+                        tasks={columnTasks}
+                        onAddTask={handleAddTask}
+                        onTaskClick={handleTaskClick}
+                      />
+                    );
+                  })}
                 </div>
-
                 <DragOverlay>
-                    {activeTask ? (
-                        <div style={{ transform: 'rotate(2deg)', opacity: 0.9 }}>
-                            <TaskCardNew task={activeTask} isDragging />
-                        </div>
-                    ) : null}
+                  {activeTask && <DraggableTaskCard task={activeTask} />}
                 </DragOverlay>
-            </DndContext>
-
-            {/* Create Task Modal */}
-            {createTaskColumnId && board && (
-                <CreateTaskModal
-                    board={board}
-                    columnId={createTaskColumnId}
-                    onClose={() => setCreateTaskColumnId(null)}
-                    onCreate={() => {
-                        refresh();
-                        setCreateTaskColumnId(null);
-                    }}
-                />
+              </DndContext>
             )}
-
-            {/* Task Detail Modal */}
-            {selectedTaskId && board && (
-                <TaskDetailModal
-                    taskId={selectedTaskId}
-                    board={board}
-                    onClose={() => setSelectedTaskId(null)}
-                    onUpdate={() => {
-                        refresh();
-                        setSelectedTaskId(null);
-                    }}
-                />
-            )}
-
-            {/* WIP Warning */}
-            {wipWarning && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: '24px',
-                    right: '24px',
-                    padding: '16px 24px',
-                    background: '#FFFBEB',
-                    border: '1px solid #FCD34D',
-                    borderRadius: '8px',
-                    color: '#92400E',
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    fontSize: '14px',
-                    zIndex: 1000,
-                }}>
-                    {wipWarning}
-                    <button
-                        onClick={() => setWipWarning(null)}
-                        style={{
-                            marginLeft: '12px',
-                            background: 'none',
-                            border: 'none',
-                            color: '#92400E',
-                            cursor: 'pointer',
-                            fontWeight: 700,
-                        }}
-                    >
-                        ×
-                    </button>
-                </div>
-            )}
+          </div>
         </div>
-    );
+      </div>
+
+      {/* Dialogs */}
+      {board && selectedColumnId && (
+        <CreateTaskDialog
+          open={showCreateTaskDialog}
+          onOpenChange={setShowCreateTaskDialog}
+          board={board}
+          columnId={selectedColumnId}
+          onSuccess={refreshTasks}
+        />
+      )}
+
+      {board && (
+        <TaskDetailDialog
+          open={showTaskDialog}
+          onOpenChange={setShowTaskDialog}
+          task={selectedTask}
+          board={board}
+          onUpdate={refreshTasks}
+          onDelete={deleteTask}
+        />
+      )}
+    </div>
+  );
 }

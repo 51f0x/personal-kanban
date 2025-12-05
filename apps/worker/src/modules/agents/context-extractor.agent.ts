@@ -151,7 +151,7 @@ export class ContextExtractorAgent extends BaseAgent {
       content += `\n\n[Content Summary]\n${contentSummary}`;
     }
 
-    return `Extract context, tags, and project hints from the following task content. Return a JSON object:
+    return `Extract context, tags, and project hints from the following task content to help the human perform the task more effectively. Return a JSON object:
 
 {
   "context": "EMAIL" | "MEETING" | "PHONE" | "READ" | "WATCH" | "DESK" | "OTHER" | null,
@@ -165,12 +165,14 @@ Task Content:
 ${content}
 
 Rules:
-- Set "context" based on where/when the task should be done
-- Extract 3-7 relevant tags (be specific, use lowercase, hyphenate multi-word tags)
-- Suggest 0-3 project hints (if the task seems part of a larger project)
-- Estimate duration if possible (e.g., "30 minutes", "1 hour")
+- Your goal is to extract metadata that helps the human understand and complete this task
+- Set "context" based on where/when the task should be done to help the human know when to work on it
+- Extract 3-7 relevant tags (be specific, use lowercase, hyphenate multi-word tags) that help categorize and organize the task
+- Suggest 0-3 project hints (if the task seems part of a larger project) to help connect related work
+- Estimate duration if possible (e.g., "30 minutes", "1 hour") to help with time planning
 - Set confidence based on how clear the context indicators are
 - Only use information from the provided content - do not invent
+- Process all content (including summaries) with the goal of making the task easier to organize and complete
 
 Return only valid JSON, no markdown formatting.`;
   }

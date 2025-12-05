@@ -1,3 +1,5 @@
+import type { TaskContext } from '@prisma/client';
+
 /**
  * Base interface for all agent results
  */
@@ -36,7 +38,7 @@ export interface SummarizationResult extends AgentResult {
  * Task analysis result (enhanced)
  */
 export interface TaskAnalysisResult extends AgentResult {
-  context?: string;
+  context?: TaskContext;
   waitingFor?: string;
   dueAt?: string;
   needsBreakdown?: boolean;
@@ -51,7 +53,7 @@ export interface TaskAnalysisResult extends AgentResult {
  * Context extraction result
  */
 export interface ContextExtractionResult extends AgentResult {
-  context?: string;
+  context?: TaskContext;
   tags?: string[];
   projectHints?: string[];
   estimatedDuration?: string;

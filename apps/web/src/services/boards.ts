@@ -1,20 +1,67 @@
-import { Board } from './types';
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
+import { apiGet, apiPost } from './api';
+import type { Board, ColumnType } from './types';
 
 export async function fetchBoards(ownerId: string): Promise<Board[]> {
-  const params = new URLSearchParams({ ownerId });
-  const response = await fetch(`${API_URL}/boards?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch boards (${response.status})`);
-  }
-  return response.json();
+    return apiGet<Board[]>(`/boards?ownerId=${encodeURIComponent(ownerId)}`);
 }
 
 export async function fetchBoardById(boardId: string): Promise<Board> {
-  const response = await fetch(`${API_URL}/boards/${boardId}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch board (${response.status})`);
-  }
-  return response.json();
+    return apiGet<Board>(`/boards/${boardId}`);
+}
+
+export interface CreateBoardPayload {
+    ownerId: string;
+    name: string;
+    description?: string;
+}
+
+export interface CreateColumnPayload {
+    name: string;
+    type: ColumnType;
+    position: number;
+    wipLimit?: number | null;
+}
+
+export async function createBoard(payload: CreateBoardPayload): Promise<Board> {
+    return apiPost<Board>('/boards', payload);
+}
+
+export async function createColumn(boardId: string, payload: CreateColumnPayload): Promise<void> {
+    await apiPost(`/boards/${boardId}/columns`, payload);
+}
+
+/**
+ * Create a board with default columns for a user
+ */
+export async function createBoardWithDefaultColumns(
+    ownerId: string,
+    userName: string
+): Promise<Board> {
+    // Create the board
+    const board = await createBoard({
+        ownerId,
+        name: `${userName.split(' ')[0] ?? 'My'} board`,
+    });
+
+    // Create default columns
+    const defaultColumns: Array<{ name: string; type: ColumnType; position: number }> = [
+        { name: 'Input', type: 'INPUT', position: 0 },
+        { name: 'Next actions', type: 'CLARIFY', position: 1 },
+        { name: 'In progress', type: 'CONTEXT', position: 2 },
+        { name: 'Done', type: 'DONE', position: 99 },
+    ];
+
+    // Create all columns
+    await Promise.all(
+        defaultColumns.map((col) =>
+            createColumn(board.id, {
+                name: col.name,
+                type: col.type,
+                position: col.position,
+            })
+        )
+    );
+
+    // Fetch the board again to get the columns
+    return fetchBoardById(board.id);
 }

@@ -1,5 +1,6 @@
 export type ColumnType = 'INPUT' | 'CLARIFY' | 'CONTEXT' | 'WAITING' | 'SOMEDAY' | 'DONE' | 'ARCHIVE';
 export type TaskContext = 'EMAIL' | 'MEETING' | 'PHONE' | 'READ' | 'WATCH' | 'DESK' | 'OTHER';
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Column {
   id: string;
@@ -54,6 +55,8 @@ export interface Task {
   context?: TaskContext | null;
   waitingFor?: string | null;
   dueAt?: string | null;
+  priority?: TaskPriority | null;
+  duration?: string | null;
   needsBreakdown: boolean;
   metadata?: Record<string, unknown> | null;
   isDone: boolean;

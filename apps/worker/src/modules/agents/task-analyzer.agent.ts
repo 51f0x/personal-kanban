@@ -163,7 +163,7 @@ export class TaskAnalyzerAgent extends BaseAgent {
       taskText += `\n\n[Content Summary from URL]\n${contentSummary}`;
     }
 
-    return `Analyze the following task and extract relevant metadata. Return a JSON object with the following structure:
+    return `Analyze the following task and extract relevant metadata to help the human perform the task more effectively. Return a JSON object with the following structure:
 
 {
   "suggestedTitle": string,
@@ -182,17 +182,19 @@ Task:
 ${taskText}
 
 Rules:
-- Set "suggestedTitle" to a clear, concise task title
-- Set "suggestedDescription" to a helpful description (use content summary if available)
+- Your goal is to help the human perform this task more effectively by providing clear, actionable metadata
+- Set "suggestedTitle" to a clear, concise task title that makes the task easy to understand
+- Set "suggestedDescription" to a helpful description that guides the human on what needs to be done (use content summary if available to provide relevant context)
 - Set "context" based on where the task should be done (EMAIL for email-related, MEETING for meetings, READ for reading tasks, etc.)
 - Set "waitingFor" if the task is blocked by someone or something
 - Set "dueAt" if there's a clear deadline mentioned (ISO format)
 - Set "needsBreakdown" to true if the task is complex and should be broken down
-- Suggest relevant tags based on the task content (3-5 tags max)
-- Set priority based on urgency and importance
-- Estimate duration in a human-readable format (e.g., "30 minutes", "2 hours")
+- Suggest relevant tags based on the task content (3-5 tags max) that help categorize and find the task
+- Set priority based on urgency and importance to help prioritize work
+- Estimate duration in a human-readable format (e.g., "30 minutes", "2 hours") to help with planning
 - Set confidence between 0 and 1 based on how certain you are about the analysis
 - Only use information from the provided task and content - do not invent information
+- Process all content (including summaries) with the goal of making the task easier to understand and complete
 
 Return only valid JSON, no markdown formatting.`;
   }

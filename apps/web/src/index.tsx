@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import { App } from './app';
 import { initOfflineQueue } from './utils/offlineQueue';
 import "./styles/globals.css";
+import "@uiw/react-md-editor/markdown-editor.css";
+import "@uiw/react-markdown-preview/markdown.css";
 
 const root = document.getElementById('root');
 
