@@ -32,7 +32,7 @@
         9090,
         5432,
         6379,
-        1025,
+        1125,
         9000
     ],
     "portsAttributes": {
@@ -52,8 +52,8 @@
             "label": "Redis",
             "onAutoForward": "notify"
         },
-        "1025": {
-            "label": "Mailhog",
+        "1125": {
+            "label": "MailMock",
             "onAutoForward": "notify"
         },
         "9000": {

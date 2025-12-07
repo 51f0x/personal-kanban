@@ -83,8 +83,9 @@ import {
 import { useTasks } from '@/hooks/useTasks';
 import { fetchBoardById, updateBoard, deleteBoard, fetchBoards } from '@/services/boards';
 import { createTask, updateTask } from '@/services/tasks';
+import { createColumn, updateColumn, deleteColumn } from '@/services/columns';
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
-import type { Board, Column, Task, TaskContext, TaskPriority } from '@/services/types';
+import type { Board, Column, Task, TaskContext, TaskPriority, ColumnType } from '@/services/types';
 import { HintsPanel } from '@/components/HintsPanel';
 import { SearchDialog } from '@/components/SearchDialog';
 import { ContextFilterBar } from '@/components/ContextFilterBar';
@@ -177,6 +178,294 @@ function RenameBoardDialog({ open, onOpenChange, board, onSuccess }: RenameBoard
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Create Column Dialog
+interface CreateColumnDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  board: Board | null;
+  onSuccess: (column: Column) => void;
+}
+
+function CreateColumnDialog({ open, onOpenChange, board, onSuccess }: CreateColumnDialogProps) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState<ColumnType>('CONTEXT');
+  const [wipLimit, setWipLimit] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setType('CONTEXT');
+      setWipLimit('');
+    }
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!board || !name.trim()) {
+      toast.error('Column name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const newColumn = await createColumn(board.id, {
+        name: name.trim(),
+        type,
+        wipLimit: wipLimit ? Number.parseInt(wipLimit, 10) : null,
+      });
+      console.log('Column created:', newColumn);
+      toast.success('Column created successfully');
+      onSuccess(newColumn);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create column');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Column</DialogTitle>
+          <DialogDescription>Add a new column to this board</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="column-name">Column Name *</Label>
+            <Input
+              id="column-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter column name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="column-type">Column Type</Label>
+            <Select value={type} onValueChange={(value) => setType(value as ColumnType)}>
+              <SelectTrigger id="column-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="INPUT">Input</SelectItem>
+                <SelectItem value="CLARIFY">Clarify</SelectItem>
+                <SelectItem value="CONTEXT">Context</SelectItem>
+                <SelectItem value="WAITING">Waiting</SelectItem>
+                <SelectItem value="SOMEDAY">Someday</SelectItem>
+                <SelectItem value="DONE">Done</SelectItem>
+                <SelectItem value="ARCHIVE">Archive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wip-limit">WIP Limit (optional)</Label>
+            <Input
+              id="wip-limit"
+              type="number"
+              min="0"
+              value={wipLimit}
+              onChange={(e) => setWipLimit(e.target.value)}
+              placeholder="Leave empty for unlimited"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create Column'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit Column Dialog
+interface EditColumnDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  column: Column | null;
+  onSuccess: (column?: Column) => void;
+}
+
+function EditColumnDialog({ open, onOpenChange, column, onSuccess }: EditColumnDialogProps) {
+  const [name, setName] = useState('');
+  const [type, setType] = useState<ColumnType>('CONTEXT');
+  const [wipLimit, setWipLimit] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (column) {
+      setName(column.name);
+      setType(column.type);
+      setWipLimit(column.wipLimit?.toString() || '');
+    } else {
+      // Reset form when column is null
+      setName('');
+      setType('CONTEXT');
+      setWipLimit('');
+    }
+  }, [column]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!column || !name.trim()) {
+      toast.error('Column name is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const updatedColumn = await updateColumn(column.id, {
+        name: name.trim(),
+        type,
+        wipLimit: wipLimit ? Number.parseInt(wipLimit, 10) : null,
+      });
+      toast.success('Column updated successfully');
+      onSuccess(updatedColumn);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update column');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!column) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Column</DialogTitle>
+          <DialogDescription>Update column information</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-column-name">Column Name *</Label>
+            <Input
+              id="edit-column-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter column name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-column-type">Column Type</Label>
+            <Select value={type} onValueChange={(value) => setType(value as ColumnType)}>
+              <SelectTrigger id="edit-column-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="INPUT">Input</SelectItem>
+                <SelectItem value="CLARIFY">Clarify</SelectItem>
+                <SelectItem value="CONTEXT">Context</SelectItem>
+                <SelectItem value="WAITING">Waiting</SelectItem>
+                <SelectItem value="SOMEDAY">Someday</SelectItem>
+                <SelectItem value="DONE">Done</SelectItem>
+                <SelectItem value="ARCHIVE">Archive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-wip-limit">WIP Limit (optional)</Label>
+            <Input
+              id="edit-wip-limit"
+              type="number"
+              min="0"
+              value={wipLimit}
+              onChange={(e) => setWipLimit(e.target.value)}
+              placeholder="Leave empty for unlimited"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Delete Column Dialog
+interface DeleteColumnDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  column: Column | null;
+  onSuccess: (column?: Column) => void;
+}
+
+function DeleteColumnDialog({ open, onOpenChange, column, onSuccess }: DeleteColumnDialogProps) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDelete = async () => {
+    if (!column) return;
+
+    setLoading(true);
+    try {
+      await deleteColumn(column.id);
+      toast.success('Column deleted successfully');
+      // Pass the deleted column so we can remove it from state immediately
+      onSuccess(column);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete column');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!column) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-5" />
+            Delete Column
+          </DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete this column? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="rounded-lg bg-destructive/10 p-4 border border-destructive/20">
+            <p className="text-sm font-medium text-destructive mb-2">Warning: This action is irreversible</p>
+            <p className="text-sm text-muted-foreground">
+              If this column contains tasks, you'll need to move or delete them first.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={loading}
+          >
+            {loading ? 'Deleting...' : 'Delete Column'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -299,9 +588,10 @@ interface SiteHeaderProps {
   onRefresh?: () => void;
   onRenameClick?: () => void;
   onDeleteClick?: () => void;
+  onAddColumnClick?: () => void;
 }
 
-function SiteHeader({ board, onAddTask, onSearchClick, onShareClick, onRefresh, onRenameClick, onDeleteClick }: SiteHeaderProps) {
+function SiteHeader({ board, onAddTask, onSearchClick, onShareClick, onRefresh, onRenameClick, onDeleteClick, onAddColumnClick }: SiteHeaderProps) {
   const navigate = useNavigate();
 
   const handleAddTask = () => {
@@ -373,6 +663,12 @@ function SiteHeader({ board, onAddTask, onSearchClick, onShareClick, onRefresh, 
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Board Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {onAddColumnClick && (
+                <DropdownMenuItem onClick={onAddColumnClick} className="cursor-pointer">
+                  <Plus className="size-4 mr-2" />
+                  Add Column
+                </DropdownMenuItem>
+              )}
               {onRenameClick && (
                 <DropdownMenuItem onClick={onRenameClick} className="cursor-pointer">
                   <Pencil className="size-4 mr-2" />
@@ -1081,9 +1377,11 @@ interface KanbanColumnProps {
   tasks: Task[];
   onAddTask: (columnId: string) => void;
   onTaskClick?: (task: Task) => void;
+  onEditColumn?: (column: Column) => void;
+  onDeleteColumn?: (column: Column) => void;
 }
 
-function KanbanColumn({ column, tasks, onAddTask, onTaskClick }: KanbanColumnProps) {
+function KanbanColumn({ column, tasks, onAddTask, onTaskClick, onEditColumn, onDeleteColumn }: KanbanColumnProps) {
   const taskCount = tasks.length;
   const wipLimit = column.wipLimit ?? null;
   const isAtLimit = wipLimit !== null && taskCount >= wipLimit;
@@ -1098,16 +1396,48 @@ function KanbanColumn({ column, tasks, onAddTask, onTaskClick }: KanbanColumnPro
     <div
       ref={setNodeRef}
       className={cn(
-        'basis-0 bg-slate-50 box-border flex gap-2.5 grow items-start min-h-px min-w-px overflow-clip p-3 relative rounded-[32px] shrink-0 min-h-[400px] transition-colors',
+        'basis-0 bg-slate-50 box-border flex gap-2.5 grow items-start min-h-px min-w-px overflow-clip p-3 relative rounded-[32px] shrink-0 min-h-[400px] transition-colors group',
         isOver && 'bg-indigo-50 border-2 border-indigo-300 border-dashed'
       )}
     >
       <div className="basis-0 flex flex-col gap-4 grow items-start min-h-px min-w-px relative shrink-0 w-full">
-        <KanbanActionButton
-          column={column}
-          taskCount={taskCount}
-          onAddTask={() => onAddTask(column.id)}
-        />
+        <div className="flex items-center gap-2 w-full">
+          <div className="flex-1">
+            <KanbanActionButton
+              column={column}
+              taskCount={taskCount}
+              onAddTask={() => onAddTask(column.id)}
+            />
+          </div>
+          {(onEditColumn || onDeleteColumn) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MoreVertical className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Column Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {onEditColumn && (
+                  <DropdownMenuItem onClick={() => onEditColumn(column)} className="cursor-pointer">
+                    <Edit className="size-4 mr-2" />
+                    Edit Column
+                  </DropdownMenuItem>
+                )}
+                {onDeleteColumn && (
+                  <DropdownMenuItem
+                    onClick={() => onDeleteColumn(column)}
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="size-4 mr-2" />
+                    Delete Column
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
         {isAtLimit && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-full">
             <p className="text-xs text-amber-700 font-medium">
@@ -1169,6 +1499,10 @@ export function BoardView() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateColumnDialog, setShowCreateColumnDialog] = useState(false);
+  const [showEditColumnDialog, setShowEditColumnDialog] = useState(false);
+  const [showDeleteColumnDialog, setShowDeleteColumnDialog] = useState(false);
+  const [selectedColumn, setSelectedColumn] = useState<Column | null>(null);
 
   // DnD sensors
   const sensors = useSensors(
@@ -1191,6 +1525,13 @@ export function BoardView() {
       setBoardError(null);
       try {
         const boardData = await fetchBoardById(boardId);
+        if (!boardData) {
+          throw new Error('Board not found');
+        }
+        // Ensure columns array exists
+        if (!boardData.columns) {
+          boardData.columns = [];
+        }
         setBoard(boardData);
       } catch (err) {
         setBoardError(err instanceof Error ? err.message : 'Failed to load board');
@@ -1223,6 +1564,25 @@ export function BoardView() {
 
   // Use tasks hook
   const { tasks, loading: loadingTasks, error: tasksError, moveTask, deleteTask, refresh: refreshTasks } = useTasks(boardId || null);
+
+  // Handle task query parameter to auto-open task dialog
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const taskId = searchParams.get('task');
+
+    if (taskId && tasks && tasks.length > 0 && !showTaskDialog) {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) {
+        setSelectedTask(task);
+        setShowTaskDialog(true);
+        // Remove the task query parameter from URL without reloading
+        const newSearchParams = new URLSearchParams(location.search);
+        newSearchParams.delete('task');
+        const newSearch = newSearchParams.toString();
+        navigate(`${location.pathname}${newSearch ? `?${newSearch}` : ''}`, { replace: true });
+      }
+    }
+  }, [tasks, location.search, location.pathname, navigate, showTaskDialog]);
 
   // Keyboard shortcut for search (Cmd/Ctrl+K)
   useEffect(() => {
@@ -1333,7 +1693,7 @@ export function BoardView() {
 
   // Group tasks by column
   const tasksByColumn = useMemo(() => {
-    if (!board) return new Map<string, Task[]>();
+    if (!board || !board.columns) return new Map<string, Task[]>();
 
     const map = new Map<string, Task[]>();
     for (const col of board.columns) {
@@ -1351,8 +1711,13 @@ export function BoardView() {
 
   // Get sorted columns
   const sortedColumns = useMemo(() => {
-    if (!board) return [];
-    return [...board.columns].sort((a, b) => a.position - b.position);
+    if (!board || !board.columns) {
+      console.log('sortedColumns: board or columns is null/undefined', { board: !!board, columns: board?.columns?.length });
+      return [];
+    }
+    const sorted = [...board.columns].sort((a, b) => a.position - b.position);
+    console.log('sortedColumns calculated:', sorted.length, sorted.map(c => c.name));
+    return sorted;
   }, [board]);
 
   // Handle creating a new task
@@ -1399,6 +1764,84 @@ export function BoardView() {
   // Handle board delete success (navigate handled in dialog)
   const handleBoardDeleteSuccess = useCallback(() => {
     // Navigation is handled in the DeleteBoardDialog component
+  }, []);
+
+  // Handle column create/edit/delete success
+  const handleColumnSuccess = useCallback((column?: Column, operation: 'create' | 'update' | 'delete' = 'create') => {
+    if (!column) {
+      console.warn('handleColumnSuccess called without column');
+      return;
+    }
+
+    console.log('handleColumnSuccess called:', { column, operation });
+
+    // Optimistically update the board state immediately
+    setBoard((prevBoard) => {
+      if (!prevBoard) {
+        console.warn('handleColumnSuccess: prevBoard is null');
+        return prevBoard;
+      }
+      const currentColumns = prevBoard.columns || [];
+      console.log('Current columns before update:', currentColumns.length);
+
+      if (operation === 'create') {
+        // Add new column and sort by position
+        const newColumns = [...currentColumns, column].sort((a, b) => a.position - b.position);
+        console.log('New columns after create:', newColumns.length);
+        return {
+          ...prevBoard,
+          columns: newColumns,
+        };
+      }
+      if (operation === 'update') {
+        // Update existing column
+        const updatedColumns = currentColumns.map((c) => (c.id === column.id ? column : c)).sort((a, b) => a.position - b.position);
+        return {
+          ...prevBoard,
+          columns: updatedColumns,
+        };
+      }
+      if (operation === 'delete') {
+        // Remove deleted column
+        return {
+          ...prevBoard,
+          columns: currentColumns.filter((c) => c.id !== column.id),
+        };
+      }
+      return prevBoard;
+    });
+
+    // Then refresh the board to ensure we have the latest data (with a delay to let the optimistic update render first)
+    if (boardId) {
+      // Delay the refresh to allow the optimistic update to render
+      setTimeout(() => {
+        fetchBoardById(boardId).then((updatedBoard) => {
+          if (updatedBoard) {
+            // Ensure columns array exists
+            if (!updatedBoard.columns) {
+              updatedBoard.columns = [];
+            }
+            setBoard(updatedBoard);
+            window.dispatchEvent(new CustomEvent('board:updated', { detail: { boardId } }));
+          }
+        }).catch((err) => {
+          console.error('Failed to refresh board after column operation:', err);
+          toast.error('Failed to refresh board');
+        });
+      }, 500);
+    }
+  }, [boardId]);
+
+  // Handle edit column
+  const handleEditColumn = useCallback((column: Column) => {
+    setSelectedColumn(column);
+    setShowEditColumnDialog(true);
+  }, []);
+
+  // Handle delete column
+  const handleDeleteColumn = useCallback((column: Column) => {
+    setSelectedColumn(column);
+    setShowDeleteColumnDialog(true);
   }, []);
 
   // Handle drag start
@@ -1573,6 +2016,17 @@ export function BoardView() {
         showDeleteDialog={showDeleteDialog}
         setShowDeleteDialog={setShowDeleteDialog}
         onBoardRenameSuccess={handleBoardRenameSuccess}
+        onAddColumnClick={() => setShowCreateColumnDialog(true)}
+        onEditColumn={handleEditColumn}
+        onDeleteColumn={handleDeleteColumn}
+        showCreateColumnDialog={showCreateColumnDialog}
+        setShowCreateColumnDialog={setShowCreateColumnDialog}
+        showEditColumnDialog={showEditColumnDialog}
+        setShowEditColumnDialog={setShowEditColumnDialog}
+        showDeleteColumnDialog={showDeleteColumnDialog}
+        setShowDeleteColumnDialog={setShowDeleteColumnDialog}
+        selectedColumn={selectedColumn}
+        onColumnSuccess={handleColumnSuccess}
       />
     </SidebarProvider>
   );
@@ -1620,6 +2074,17 @@ function BoardViewContent({
   showDeleteDialog,
   setShowDeleteDialog,
   onBoardRenameSuccess,
+  onAddColumnClick,
+  onEditColumn,
+  onDeleteColumn,
+  showCreateColumnDialog,
+  setShowCreateColumnDialog,
+  showEditColumnDialog,
+  setShowEditColumnDialog,
+  showDeleteColumnDialog,
+  setShowDeleteColumnDialog,
+  selectedColumn,
+  onColumnSuccess,
 }: {
   boardId: string | undefined;
   board: Board | null;
@@ -1661,8 +2126,21 @@ function BoardViewContent({
   showDeleteDialog: boolean;
   setShowDeleteDialog: (open: boolean) => void;
   onBoardRenameSuccess: () => void;
+  onAddColumnClick?: () => void;
+  onEditColumn?: (column: Column) => void;
+  onDeleteColumn?: (column: Column) => void;
+  showCreateColumnDialog: boolean;
+  setShowCreateColumnDialog: (open: boolean) => void;
+  showEditColumnDialog: boolean;
+  setShowEditColumnDialog: (open: boolean) => void;
+  showDeleteColumnDialog: boolean;
+  setShowDeleteColumnDialog: (open: boolean) => void;
+  selectedColumn: Column | null;
+  onColumnSuccess: (column?: Column, operation?: 'create' | 'update' | 'delete') => void;
 }) {
   const { open } = useSidebar();
+  // Use the passed onAddColumnClick or create a default one
+  const handleAddColumnClick = onAddColumnClick || (() => setShowCreateColumnDialog(true));
   const location = useLocation();
 
   return (
@@ -1677,6 +2155,7 @@ function BoardViewContent({
           onRefresh={refreshTasks}
           onRenameClick={() => setShowRenameDialog(true)}
           onDeleteClick={() => setShowDeleteDialog(true)}
+          onAddColumnClick={() => setShowCreateColumnDialog(true)}
         />
         <div className="flex flex-1 flex-col overflow-auto">
           {/* Context Filter Bar */}
@@ -1776,8 +2255,13 @@ function BoardViewContent({
           ) : (
             <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">
               {sortedColumns.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-slate-400">No columns found</p>
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <p className="text-slate-400 text-lg">No columns found</p>
+                  <p className="text-slate-500 text-sm">Create your first column to get started</p>
+                  <Button onClick={handleAddColumnClick} className="mt-2">
+                    <Plus className="size-4 mr-2" />
+                    Create Column
+                  </Button>
                 </div>
               ) : (
                 <DndContext
@@ -1797,6 +2281,8 @@ function BoardViewContent({
                           tasks={columnTasks}
                           onAddTask={handleAddTask}
                           onTaskClick={handleTaskClick}
+                          onEditColumn={onEditColumn}
+                          onDeleteColumn={onDeleteColumn}
                         />
                       );
                     })}
@@ -1863,6 +2349,27 @@ function BoardViewContent({
         onSuccess={() => {
           // Navigation is handled in the dialog
         }}
+      />
+
+      <CreateColumnDialog
+        open={showCreateColumnDialog}
+        onOpenChange={setShowCreateColumnDialog}
+        board={board}
+        onSuccess={(column) => onColumnSuccess(column, 'create')}
+      />
+
+      <EditColumnDialog
+        open={showEditColumnDialog}
+        onOpenChange={setShowEditColumnDialog}
+        column={selectedColumn}
+        onSuccess={(column) => onColumnSuccess(column, 'update')}
+      />
+
+      <DeleteColumnDialog
+        open={showDeleteColumnDialog}
+        onOpenChange={setShowDeleteColumnDialog}
+        column={selectedColumn}
+        onSuccess={(column) => onColumnSuccess(column, 'delete')}
       />
     </div>
   );

@@ -51,9 +51,13 @@ async function bootstrap() {
         .addTag('analytics', 'Analytics and reporting endpoints')
         .addTag('capture', 'Quick capture endpoints')
         .addTag('clarification', 'Task clarification endpoints')
+        .addTag('email-actions', 'Email action endpoints')
         .addBearerAuth()
         .addApiKey({ type: 'apiKey', name: 'X-Capture-Token', in: 'header' }, 'capture-token')
-        .addApiKey({ type: 'apiKey', name: 'X-Internal-Service-Token', in: 'header' }, 'internal-service-token')
+        .addApiKey(
+            { type: 'apiKey', name: 'X-Internal-Service-Token', in: 'header' },
+            'internal-service-token',
+        )
         .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);

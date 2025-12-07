@@ -4,11 +4,27 @@ import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.input';
 import { UpdateTaskDto } from './dto/update-task.input';
 import { MoveTaskDto } from './dto/move-task.input';
+import {
+    CreateTaskUseCase,
+    UpdateTaskUseCase,
+    MoveTaskUseCase,
+    DeleteTaskUseCase,
+    GetStaleTasksUseCase,
+    MarkStaleUseCase,
+} from './application/use-cases';
 
 @ApiTags('tasks')
 @Controller()
 export class TaskController {
-  constructor(private readonly taskService: TaskService) {}
+  constructor(
+    private readonly taskService: TaskService, // Keep for query methods
+    private readonly createTaskUseCase: CreateTaskUseCase,
+    private readonly updateTaskUseCase: UpdateTaskUseCase,
+    private readonly moveTaskUseCase: MoveTaskUseCase,
+    private readonly deleteTaskUseCase: DeleteTaskUseCase,
+    private readonly getStaleTasksUseCase: GetStaleTasksUseCase,
+    private readonly markStaleUseCase: MarkStaleUseCase,
+  ) {}
 
   @Get('tasks/:id')
   @ApiBearerAuth()
@@ -40,7 +56,7 @@ export class TaskController {
     @Query('days') days?: string,
   ) {
     const thresholdDays = days ? Number.parseInt(days, 10) : 7;
-    return this.taskService.getStaleTasks(boardId, thresholdDays);
+    return this.getStaleTasksUseCase.execute(boardId, thresholdDays);
   }
 
   @Post('tasks')
@@ -50,7 +66,7 @@ export class TaskController {
   @ApiResponse({ status: 201, description: 'Task created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   createTask(@Body() dto: CreateTaskDto) {
-    return this.taskService.createTask(dto);
+    return this.createTaskUseCase.execute(dto);
   }
 
   @Patch('tasks/:id')
@@ -61,7 +77,7 @@ export class TaskController {
   @ApiResponse({ status: 200, description: 'Task updated successfully' })
   @ApiResponse({ status: 404, description: 'Task not found' })
   updateTask(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTaskDto) {
-    return this.taskService.updateTask(id, dto);
+    return this.updateTaskUseCase.execute(id, dto);
   }
 
   @Post('tasks/:id/move')
@@ -72,7 +88,7 @@ export class TaskController {
   @ApiResponse({ status: 200, description: 'Task moved successfully' })
   @ApiResponse({ status: 404, description: 'Task not found' })
   moveTask(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MoveTaskDto) {
-    return this.taskService.moveTask(id, dto);
+    return this.moveTaskUseCase.execute(id, dto);
   }
 
   @Delete('tasks/:id')
@@ -82,6 +98,6 @@ export class TaskController {
   @ApiResponse({ status: 200, description: 'Task deleted successfully' })
   @ApiResponse({ status: 404, description: 'Task not found' })
   deleteTask(@Param('id', ParseUUIDPipe) id: string) {
-    return this.taskService.deleteTask(id);
+    return this.deleteTaskUseCase.execute(id);
   }
 }

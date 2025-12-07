@@ -4,8 +4,8 @@ import { Queue } from 'bullmq';
 
 export interface AgentProcessingJobData {
   taskId: string;
-  boardId: string;
-  progressCallbackUrl: string; // API endpoint to call for progress updates
+  boardId?: string; // Optional, can be extracted from task if needed
+  progressCallbackUrl?: string; // Deprecated - kept for backward compatibility, events are used instead
 }
 
 @Injectable()
@@ -18,11 +18,11 @@ export class AgentQueueService {
 
   /**
    * Queue a task for agent processing
+   * Progress updates are now sent via domain events instead of HTTP callbacks
    */
   async queueAgentProcessing(
     taskId: string,
-    boardId: string,
-    progressCallbackUrl: string,
+    boardId?: string,
   ): Promise<void> {
     try {
       await this.agentQueue.add(
@@ -30,7 +30,6 @@ export class AgentQueueService {
         {
           taskId,
           boardId,
-          progressCallbackUrl,
         },
         {
           jobId: `agent-processing-${taskId}`, // Unique job ID to prevent duplicates

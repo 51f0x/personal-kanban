@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Ollama } from 'ollama';
-import { withTimeout, retryWithBackoff } from '../../shared/utils';
+import { withTimeout, retryWithBackoff, type RetryOptions } from '@personal-kanban/shared';
 import { INPUT_LIMITS } from '../../shared/utils/input-validator.util';
 
 /**
@@ -90,8 +90,11 @@ export abstract class BaseAgent {
                         message.includes('temporary');
                     return isRetryable;
                 },
-            },
-            this.logger,
+                logger: {
+                    warn: (msg, ...args) => this.logger.warn(msg, ...args),
+                    error: (msg, ...args) => this.logger.error(msg, ...args),
+                },
+            } as RetryOptions,
         );
     }
 

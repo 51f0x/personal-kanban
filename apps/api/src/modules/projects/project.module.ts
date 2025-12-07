@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@personal-kanban/shared';
 import { ProjectService } from './project.service';
 
 @Module({

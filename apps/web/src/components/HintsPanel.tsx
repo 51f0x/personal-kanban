@@ -189,7 +189,7 @@ export function HintsPanel({ taskId, onHintApplied }: HintsPanelProps) {
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{hint.title || hint.hintType}</span>
-                      {hint.confidence !== null && (
+                      {hint.confidence != null && (
                         <Badge variant="outline" className="text-xs">
                           {Math.round(hint.confidence * 100)}% confidence
                         </Badge>

@@ -1,6 +1,6 @@
 import { Controller, Get, Param, NotFoundException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 
 /**
  * Agents Controller

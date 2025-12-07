@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import type { AgentProcessingResult } from './types';
 
 /**
@@ -183,6 +183,23 @@ export class HintService {
                         totalActions: results.actionExtraction.totalActions,
                     },
                     confidence: results.actionExtraction.confidence,
+                });
+            }
+
+            // Create hint from task help result
+            if (results.taskHelp?.success && results.taskHelp.helpText) {
+                hints.push({
+                    taskId,
+                    agentId: 'task-help-agent',
+                    hintType: 'help',
+                    title: 'Task Help & Guidance',
+                    content: results.taskHelp.helpText,
+                    data: {
+                        keySteps: results.taskHelp.keySteps || [],
+                        prerequisites: results.taskHelp.prerequisites || [],
+                        resources: results.taskHelp.resources || [],
+                    },
+                    confidence: results.taskHelp.confidence,
                 });
             }
 
@@ -461,6 +478,15 @@ export class HintService {
                 case 'duration':
                     if (hint.content) {
                         updates.duration = hint.content;
+                    }
+                    break;
+
+                case 'help':
+                    if (hint.content) {
+                        const currentDescription = hint.task.description || '';
+                        updates.description = currentDescription
+                            ? `${currentDescription}\n\n## Task Help\n\n${hint.content}`
+                            : `## Task Help\n\n${hint.content}`;
                     }
                     break;
 

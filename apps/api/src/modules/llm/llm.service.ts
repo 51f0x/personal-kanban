@@ -3,9 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '@prisma/client';
 import { Ollama } from 'ollama';
 import * as Joi from 'joi';
-import { parseAndValidateJson } from '../../shared/utils/json-parser.util';
-import { withTimeout } from '../../shared/utils/timeout.util';
-import { retryWithBackoff } from '../../shared/utils/retry.util';
+import {
+    parseAndValidateJson,
+    withTimeout,
+    retryWithBackoff,
+    type RetryOptions,
+} from '@personal-kanban/shared';
 
 export interface TaskAnalysisResult {
     context?: TaskContext;
@@ -80,8 +83,11 @@ export class LlmService {
                     maxAttempts: this.maxRetries + 1,
                     initialDelayMs: 1000,
                     maxDelayMs: 5000,
-                },
-                this.logger,
+                    logger: {
+                        warn: (msg, ...args) => this.logger.warn(msg, ...args),
+                        error: (msg, ...args) => this.logger.error(msg, ...args),
+                    },
+                } as RetryOptions,
             );
 
             const analysisText = response.response || '';
@@ -90,16 +96,19 @@ export class LlmService {
             const parseResult = parseAndValidateJson(
                 analysisText,
                 taskAnalysisResultSchema,
-                this.logger,
+                {
+                    warn: (msg, ...args) => this.logger.warn(msg, ...args),
+                },
                 'task analysis',
             );
 
-            if (parseResult.success) {
-                return parseResult.data;
-            } else {
-                this.logger.warn('Failed to parse LLM response', { error: parseResult.error });
+            if (!parseResult.success) {
+                const errorMessage = 'error' in parseResult ? parseResult.error : 'Unknown error';
+                this.logger.warn('Failed to parse LLM response', { error: errorMessage });
                 return null;
             }
+
+            return parseResult.data;
         } catch (error) {
             this.logger.error(
                 'Error calling LLM service',

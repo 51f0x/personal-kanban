@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import type { RegisterUserDto } from './dto/register-user.dto';
 import { PasswordService } from './password.service';
 

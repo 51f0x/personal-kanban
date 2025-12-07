@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { CreateRuleDto } from './dto/create-rule.input';
 import { UpdateRuleDto } from './dto/update-rule.input';
 

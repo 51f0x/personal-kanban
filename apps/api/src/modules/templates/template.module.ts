@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@personal-kanban/shared';
 import { TemplateController } from './template.controller';
 import { TemplateService } from './template.service';
 

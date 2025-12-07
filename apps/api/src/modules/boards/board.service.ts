@@ -1,81 +1,101 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
-import { BoardGateway } from '../realtime/board.gateway';
+import { PrismaService } from '@personal-kanban/shared';
 import { CreateBoardDto } from './dto/create-board.input';
 import { UpdateBoardDto } from './dto/update-board.input';
+import { IBoardRepository, IEventBus, BoardId, BoardUpdatedEvent } from '@personal-kanban/shared';
 
 @Injectable()
 export class BoardService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly boardGateway: BoardGateway,
+        @Inject('IBoardRepository') private readonly boardRepository: IBoardRepository,
+        @Inject('IEventBus') private readonly eventBus: IEventBus,
     ) {}
 
-    createBoard(input: CreateBoardDto) {
-        return this.prisma.board.create({
-            data: {
-                ownerId: input.ownerId,
-                name: input.name,
-                description: input.description,
-                config: input.config ?? Prisma.JsonNull,
-            },
+    async createBoard(input: CreateBoardDto) {
+        const config = input.config 
+            ? (typeof input.config === 'object' ? input.config as Record<string, unknown> : null)
+            : null;
+            
+        const board = await this.boardRepository.create({
+            ownerId: input.ownerId,
+            name: input.name,
+            description: input.description,
+            config,
         });
+
+        // Map to Prisma format for backward compatibility
+        return {
+            ...board,
+            config: board.config ?? Prisma.JsonNull,
+        };
     }
 
-    listBoardsForOwner(ownerId: string) {
-        return this.prisma.board.findMany({
-            where: { ownerId },
-            orderBy: { createdAt: 'asc' },
-            include: {
-                columns: { orderBy: { position: 'asc' } },
-                projects: true,
-            },
+    async listBoardsForOwner(ownerId: string) {
+        const boards = await this.boardRepository.findByOwnerId(ownerId, {
+            includeColumns: true,
+            includeProjects: true,
         });
+
+        // Map to Prisma format for backward compatibility
+        return boards.map((board) => ({
+            ...board,
+            columns: board.columns || [],
+            projects: board.projects || [],
+            config: board.config ?? Prisma.JsonNull,
+        }));
     }
 
-    getBoardById(id: string) {
-        return this.prisma.board.findUnique({
-            where: { id },
-            include: {
-                columns: { orderBy: { position: 'asc' } },
-                projects: true,
-            },
+    async getBoardById(id: string) {
+        const boardId = BoardId.from(id);
+        const board = await this.boardRepository.findById(boardId, {
+            includeColumns: true,
+            includeProjects: true,
         });
+
+        if (!board) {
+            return null;
+        }
+
+        // Map to Prisma format for backward compatibility
+        return {
+            ...board,
+            columns: board.columns || [],
+            projects: board.projects || [],
+            config: board.config ?? Prisma.JsonNull,
+        };
     }
 
     async updateBoard(id: string, input: UpdateBoardDto) {
-        const data: Prisma.BoardUpdateInput = {
+        const boardId = BoardId.from(id);
+        const updateData: any = {
             name: input.name,
             description: input.description === undefined ? undefined : input.description,
             config:
                 input.config === undefined
                     ? undefined
                     : input.config === null
-                      ? Prisma.JsonNull
+                      ? null
                       : input.config,
         };
 
-        const updatedBoard = await this.prisma.board.update({
-            where: { id },
-            data,
-        });
+        const updatedBoard = await this.boardRepository.update(boardId, updateData);
 
-        // Emit realtime update event
-        this.boardGateway.emitBoardUpdate(id, {
-            type: 'board.updated',
-            boardId: id,
-        });
+        // Publish domain event
+        await this.eventBus.publish(new BoardUpdatedEvent(boardId, updateData));
 
-        return updatedBoard;
+        // Map to Prisma format for backward compatibility
+        return {
+            ...updatedBoard,
+            config: updatedBoard.config ?? Prisma.JsonNull,
+        };
     }
 
     async deleteBoard(id: string) {
         // First, get the board to find the owner
-        const board = await this.prisma.board.findUnique({
-            where: { id },
-            select: { ownerId: true },
-        });
+        const boardId = BoardId.from(id);
+        const board = await this.boardRepository.findById(boardId);
 
         if (!board) {
             throw new Error('Board not found');
@@ -129,9 +149,7 @@ export class BoardService {
         });
 
         // 8. Delete the board itself
-        await this.prisma.board.delete({
-            where: { id },
-        });
+        await this.boardRepository.delete(boardId);
 
         // 9. If this was the default board, set the next board as default (or null if no boards left)
         if (isDefaultBoard) {

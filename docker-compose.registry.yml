@@ -1,0 +1,80 @@
+# Docker Compose file for pulling images from registry at 192.168.1.53
+# Usage: docker-compose -f docker-compose.registry.yml up -d
+
+services:
+  api:
+    image: 192.168.1.53:5000/personal-kanban-api:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban
+      REDIS_URL: redis://redis:6379
+      LLM_ENDPOINT: http://ollama:11434
+      LLM_MODEL: llama3.2:1b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  worker:
+    image: 192.168.1.53:5000/personal-kanban-worker:latest
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    image: 192.168.1.53:5000/personal-kanban-web:latest
+    depends_on:
+      - api
+    ports:
+      - "4173:80"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kanban
+      POSTGRES_PASSWORD: kanban
+      POSTGRES_DB: kanban
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kanban"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 20 1 --loglevel warning
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  pg_data:
+  ollama_data:

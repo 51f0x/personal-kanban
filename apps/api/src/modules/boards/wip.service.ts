@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { Injectable, Inject } from '@nestjs/common';
+import { IColumnRepository, ITaskRepository, Column, ColumnId, TaskId, BoardId } from '@personal-kanban/shared';
 
 export interface WipStatus {
   columnId: string;
@@ -12,43 +12,31 @@ export interface WipStatus {
 
 @Injectable()
 export class WipService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject('IColumnRepository') private readonly columnRepository: IColumnRepository,
+    @Inject('ITaskRepository') private readonly taskRepository: ITaskRepository,
+  ) {}
 
   /**
    * Check if adding a task to a column would violate WIP limits
    */
   async checkWipLimit(columnId: string, excludeTaskId?: string): Promise<WipStatus> {
-    const column = await this.prisma.column.findUnique({
-      where: { id: columnId },
-      include: {
-        tasks: {
-          where: excludeTaskId ? { id: { not: excludeTaskId } } : undefined,
-          select: { id: true },
-        },
-      },
-    });
+    const columnIdVO = ColumnId.from(columnId);
+    const columnData = await this.columnRepository.findById(columnIdVO);
 
-    if (!column) {
+    if (!columnData) {
       throw new Error(`Column not found: ${columnId}`);
     }
 
-    const currentCount = column.tasks.length;
+    // Convert to Column entity
+    const column = Column.fromPersistence(columnData);
+
+    const excludeTaskIdVO = excludeTaskId ? TaskId.from(excludeTaskId) : undefined;
+    const currentCount = await this.taskRepository.countByColumnId(columnIdVO, excludeTaskIdVO);
     const wipLimit = column.wipLimit;
 
-    // If no WIP limit, always allowed
-    if (wipLimit === null) {
-      return {
-        columnId: column.id,
-        columnName: column.name,
-        currentCount,
-        wipLimit: null,
-        allowed: true,
-        wouldExceed: false,
-      };
-    }
-
-    // Check if adding one more would exceed the limit
-    const wouldExceed = currentCount >= wipLimit;
+    // Use entity's WIP validation method
+    const wouldExceed = column.wouldExceedWipLimit(currentCount, excludeTaskId);
 
     return {
       columnId: column.id,
@@ -64,30 +52,31 @@ export class WipService {
    * Get WIP status for all columns in a board
    */
   async getBoardWipStatus(boardId: string): Promise<WipStatus[]> {
-    const columns = await this.prisma.column.findMany({
-      where: { boardId },
-      include: {
-        _count: {
-          select: { tasks: true },
-        },
-      },
-      orderBy: { position: 'asc' },
-    });
+    const boardIdVO = BoardId.from(boardId);
+    const columnsData = await this.columnRepository.findByBoardIdOrdered(boardIdVO);
 
-    return columns.map((column) => {
-      const currentCount = column._count.tasks;
-      const wipLimit = column.wipLimit;
-      const wouldExceed = wipLimit !== null && currentCount >= wipLimit;
+    // Get task counts for each column
+    const statuses = await Promise.all(
+      columnsData.map(async (columnData) => {
+        // Convert to Column entity
+        const column = Column.fromPersistence(columnData);
+        const columnIdVO = ColumnId.from(column.id);
+        const currentCount = await this.taskRepository.countByColumnId(columnIdVO);
+        const wipLimit = column.wipLimit;
+        const wouldExceed = column.isAtWipLimit(currentCount);
 
-      return {
-        columnId: column.id,
-        columnName: column.name,
-        currentCount,
-        wipLimit,
-        allowed: !wouldExceed,
-        wouldExceed,
-      };
-    });
+        return {
+          columnId: column.id,
+          columnName: column.name,
+          currentCount,
+          wipLimit,
+          allowed: !wouldExceed,
+          wouldExceed,
+        };
+      }),
+    );
+
+    return statuses;
   }
 
   /**

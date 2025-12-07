@@ -3,7 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@personal-kanban/shared';
 import { AuthController } from './auth.controller';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
@@ -21,12 +21,15 @@ import { JwtGuard } from '../../guards/jwt.guard';
         PassportModule.register({}),
         JwtModule.registerAsync({
             imports: [ConfigModule],
-            useFactory: async (config: ConfigService) => ({
-                secret: config.get<string>('JWT_SECRET', 'change-me-in-production'),
-                signOptions: {
-                    expiresIn: config.get<string>('JWT_ACCESS_EXPIRY', '15m'),
-                },
-            }),
+            useFactory: async (config: ConfigService) => {
+                const expiresIn = config.get<string>('JWT_ACCESS_EXPIRY', '15m');
+                return {
+                    secret: config.get<string>('JWT_SECRET', 'change-me-in-production'),
+                    signOptions: {
+                        expiresIn: expiresIn as any,
+                    },
+                } as any;
+            },
             inject: [ConfigService],
         }),
     ],

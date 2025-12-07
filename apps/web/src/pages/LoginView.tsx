@@ -31,7 +31,7 @@ export default function LoginView() {
 
             // Check if user has any boards
             let boards = await fetchBoards(user.id);
-            
+
             // If no boards exist, create one with default columns
             if (boards.length === 0) {
                 toast.info('Creating your first board...');
@@ -40,9 +40,11 @@ export default function LoginView() {
             }
 
             // Redirect to the first board or the page user was trying to access
-            const from = (location.state as { from?: Location })?.from?.pathname;
+            const from = (location.state as { from?: Location })?.from;
             if (from) {
-                navigate(from, { replace: true });
+                // Preserve both pathname and search parameters (query string)
+                const redirectPath = from.pathname + (from.search || '');
+                navigate(redirectPath, { replace: true });
             } else if (boards.length > 0) {
                 navigate(`/board/${boards[0].id}`, { replace: true });
             } else {

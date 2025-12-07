@@ -43,10 +43,11 @@ export class JwtService {
       type: 'access',
     };
 
+    const expiresIn = this.config.get<string>('JWT_ACCESS_EXPIRY', '15m');
     return this.jwtService.signAsync(payload, {
       secret: this.config.get<string>('JWT_SECRET'),
-      expiresIn: this.config.get<string>('JWT_ACCESS_EXPIRY', '15m'),
-    });
+      expiresIn: expiresIn as any,
+    } as any);
   }
 
   /**
@@ -59,10 +60,11 @@ export class JwtService {
       type: 'refresh',
     };
 
+    const expiresIn = this.config.get<string>('JWT_REFRESH_EXPIRY', '7d');
     return this.jwtService.signAsync(payload, {
       secret: this.config.get<string>('JWT_SECRET'),
-      expiresIn: this.config.get<string>('JWT_REFRESH_EXPIRY', '7d'),
-    });
+      expiresIn: expiresIn as any,
+    } as any);
   }
 
   /**

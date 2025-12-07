@@ -1,19 +1,35 @@
 services:
-  postgres:
+  postgres-api:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: kanban
-      POSTGRES_PASSWORD: kanban
-      POSTGRES_DB: kanban
+      POSTGRES_USER: kanban_api
+      POSTGRES_PASSWORD: kanban_api
+      POSTGRES_DB: kanban_api
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kanban"]
+      test: ["CMD-SHELL", "pg_isready -U kanban_api"]
       interval: 10s
       timeout: 5s
       retries: 5
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_api_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+
+  postgres-worker:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kanban_worker
+      POSTGRES_PASSWORD: kanban_worker
+      POSTGRES_DB: kanban_worker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kanban_worker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pg_worker_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
 
   redis:
     image: redis:7-alpine
@@ -21,8 +37,8 @@ services:
     ports:
       - "6379:6379"
 
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
+  mailpit:
+    image: axllent/mailpit:latest
     platform: linux/amd64
     ports:
       - "1025:1025"
@@ -65,12 +81,12 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban
+      DATABASE_URL: postgresql://kanban_api:kanban_api@postgres-api:5432/kanban_api
       REDIS_URL: redis://redis:6379
       LLM_ENDPOINT: http://ollama:11434
       LLM_MODEL: llama3.2:1b
     depends_on:
-      postgres:
+      postgres-api:
         condition: service_healthy
       redis:
         condition: service_started
@@ -85,10 +101,10 @@ services:
       dockerfile: docker/Dockerfile.worker
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban
+      DATABASE_URL: postgresql://kanban_worker:kanban_worker@postgres-worker:5432/kanban_worker
       REDIS_URL: redis://redis:6379
     depends_on:
-      postgres:
+      postgres-worker:
         condition: service_healthy
       redis:
         condition: service_started
@@ -103,6 +119,7 @@ services:
       - "4173:80"
 
 volumes:
-  pg_data:
+  pg_api_data:
+  pg_worker_data:
   minio_data:
   ollama_data:

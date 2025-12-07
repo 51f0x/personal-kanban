@@ -412,7 +412,7 @@ function SettingsViewContent({
 
     return (
         <div className="flex h-screen w-full bg-slate-50">
-            {open && <AppSidebar onSearchClick={handleSearchClick} />}
+            {open && <AppSidebar />}
             <div className="flex flex-col flex-1 overflow-auto">
                 {/* Header */}
                 <div className="bg-white border-b border-slate-200 px-8 py-6">

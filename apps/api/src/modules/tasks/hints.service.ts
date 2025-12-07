@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { TaskService } from './task.service';
 import { TagService } from '../tags/tag.service';
 import { BoardGateway } from '../realtime/board.gateway';

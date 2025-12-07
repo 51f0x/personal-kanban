@@ -1,13 +1,23 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { BoardService } from './board.service';
 import { CreateBoardDto } from './dto/create-board.input';
 import { UpdateBoardDto } from './dto/update-board.input';
+import {
+    CreateBoardUseCase,
+    UpdateBoardUseCase,
+    DeleteBoardUseCase,
+} from './application/use-cases';
 
 @ApiTags('boards')
 @Controller('boards')
 export class BoardController {
-  constructor(private readonly boardService: BoardService) {}
+  constructor(
+    private readonly boardService: BoardService, // Keep for query methods
+    private readonly createBoardUseCase: CreateBoardUseCase,
+    private readonly updateBoardUseCase: UpdateBoardUseCase,
+    private readonly deleteBoardUseCase: DeleteBoardUseCase,
+  ) {}
 
   @Get()
   @ApiBearerAuth()
@@ -28,8 +38,12 @@ export class BoardController {
   @ApiParam({ name: 'id', description: 'Board ID' })
   @ApiResponse({ status: 200, description: 'Board information' })
   @ApiResponse({ status: 404, description: 'Board not found' })
-  getBoard(@Param('id') id: string) {
-    return this.boardService.getBoardById(id);
+  async getBoard(@Param('id') id: string) {
+    const board = await this.boardService.getBoardById(id);
+    if (!board) {
+      throw new NotFoundException(`Board not found: ${id}`);
+    }
+    return board;
   }
 
   @Post()
@@ -39,7 +53,7 @@ export class BoardController {
   @ApiResponse({ status: 201, description: 'Board created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   createBoard(@Body() dto: CreateBoardDto) {
-    return this.boardService.createBoard(dto);
+    return this.createBoardUseCase.execute(dto);
   }
 
   @Patch(':id')
@@ -50,7 +64,7 @@ export class BoardController {
   @ApiResponse({ status: 200, description: 'Board updated successfully' })
   @ApiResponse({ status: 404, description: 'Board not found' })
   updateBoard(@Param('id') id: string, @Body() dto: UpdateBoardDto) {
-    return this.boardService.updateBoard(id, dto);
+    return this.updateBoardUseCase.execute(id, dto);
   }
 
   @Delete(':id')
@@ -60,6 +74,6 @@ export class BoardController {
   @ApiResponse({ status: 200, description: 'Board deleted successfully' })
   @ApiResponse({ status: 404, description: 'Board not found' })
   deleteBoard(@Param('id') id: string) {
-    return this.boardService.deleteBoard(id);
+    return this.deleteBoardUseCase.execute(id);
   }
 }

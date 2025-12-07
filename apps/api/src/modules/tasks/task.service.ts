@@ -1,76 +1,52 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, TaskEventType } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
-import { BoardGateway } from '../realtime/board.gateway';
+import { BadRequestException, Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '@personal-kanban/shared';
 import { WipService } from '../boards/wip.service';
-import { LlmService } from '../llm/llm.service';
 import { CreateTaskDto } from './dto/create-task.input';
 import { UpdateTaskDto } from './dto/update-task.input';
 import { MoveTaskDto, MoveTaskResult } from './dto/move-task.input';
+import {
+    ITaskRepository,
+    IColumnRepository,
+    IEventBus,
+    TaskId,
+    BoardId,
+    ColumnId,
+    TaskCreatedEvent,
+    TaskMovedEvent,
+    TaskUpdatedEvent,
+    TaskDeletedEvent,
+    TaskStaleEvent,
+} from '@personal-kanban/shared';
 
 @Injectable()
 export class TaskService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly boardGateway: BoardGateway,
+        @Inject('ITaskRepository') private readonly taskRepository: ITaskRepository,
+        @Inject('IColumnRepository') private readonly columnRepository: IColumnRepository,
+        @Inject('IEventBus') private readonly eventBus: IEventBus,
         private readonly wipService: WipService,
-        private readonly llmService: LlmService,
     ) {}
 
     async createTask(input: CreateTaskDto) {
-        // Analyze task with LLM if title/description provided
-        let llmAnalysis = null;
-        if (input.title) {
-            try {
-                llmAnalysis = await this.llmService.analyzeTask(input.title, input.description);
-            } catch (error) {
-                // Log but don't fail task creation if LLM fails
-                // LLM analysis is optional, so we continue without it
-            }
-        }
+        // Task creation is immediate - LLM analysis happens asynchronously in worker
+        // Use explicit input values only
+        const context = input.context ?? null;
+        const waitingFor = input.waitingFor ?? null;
+        const dueAt = input.dueAt ?? null;
+        const needsBreakdown = input.needsBreakdown ?? false;
 
-        // Merge LLM analysis with input, giving priority to explicit input values
-        const context = input.context ?? llmAnalysis?.context ?? null;
-        const waitingFor = input.waitingFor ?? llmAnalysis?.waitingFor ?? null;
-
-        // Parse dueAt from LLM analysis, handling invalid dates gracefully
-        let dueAt = input.dueAt;
-        if (!dueAt && llmAnalysis?.dueAt) {
-            try {
-                const parsedDate = new Date(llmAnalysis.dueAt);
-                if (!Number.isNaN(parsedDate.getTime())) {
-                    dueAt = parsedDate;
-                }
-            } catch {
-                // Invalid date, ignore
-            }
-        }
-
-        const needsBreakdown = input.needsBreakdown ?? llmAnalysis?.needsBreakdown ?? false;
-
-        // Build metadata object
+        // Build metadata object from input only
         const metadata: Record<string, unknown> = {
             ...(input.metadata && typeof input.metadata === 'object' ? input.metadata : {}),
-            ...(llmAnalysis
-                ? {
-                      llmAnalysis: {
-                          priority: llmAnalysis.priority,
-                          estimatedDuration: llmAnalysis.estimatedDuration,
-                          suggestedTags: llmAnalysis.suggestedTags,
-                          confidence: llmAnalysis.confidence,
-                          analyzedAt: new Date().toISOString(),
-                      },
-                  }
-                : {}),
         };
 
+        // Get the max position in the target column to place new task at the end
+        const columnId = ColumnId.from(input.columnId);
+        const newPosition = (await this.taskRepository.getMaxPositionInColumn(columnId)) + 1;
+
         return this.prisma.$transaction(async (tx) => {
-            // Get the max position in the target column to place new task at the end
-            const maxPositionResult = await tx.task.aggregate({
-                where: { columnId: input.columnId },
-                _max: { position: true },
-            });
-            const newPosition = (maxPositionResult._max.position ?? -1) + 1;
 
             const task = await tx.task.create({
                 data: {
@@ -110,48 +86,30 @@ export class TaskService {
                 });
             }
 
-            await tx.taskEvent.create({
-                data: {
-                    taskId: task.id,
-                    boardId: task.boardId,
-                    type: TaskEventType.CREATED,
-                    toColumnId: task.columnId,
-                },
-            });
-
-            this.boardGateway.emitBoardUpdate(task.boardId, {
-                type: 'task.created',
-                taskId: task.id,
-            });
             return task;
         });
     }
 
     async updateTask(id: string, input: UpdateTaskDto) {
         const { tags, columnId, projectId, metadata, ...rest } = input;
+        const taskId = TaskId.from(id);
 
-        const data: Prisma.TaskUpdateInput = {
+        // Build update data for repository
+        const updateData: any = {
             ...rest,
-            metadata:
-                metadata === undefined ? undefined : metadata === null ? Prisma.JsonNull : metadata,
-            project:
-                projectId === undefined
-                    ? undefined
-                    : projectId === null
-                      ? { disconnect: true }
-                      : { connect: { id: projectId } },
-            column:
-                columnId === undefined
-                    ? undefined
-                    : {
-                          connect: { id: columnId },
-                      },
+            metadata: metadata === undefined ? undefined : metadata === null ? null : metadata,
+            projectId: projectId === undefined ? undefined : projectId === null ? null : projectId,
+            columnId: columnId === undefined ? undefined : columnId,
         };
 
+        // Update task using repository
+        const task = await this.taskRepository.update(taskId, updateData);
+
         return this.prisma.$transaction(async (tx) => {
-            const task = await tx.task.update({
+            // Get updated task for boardId
+            const taskData = await tx.task.findUnique({
                 where: { id },
-                data,
+                select: { boardId: true },
             });
 
             if (tags) {
@@ -164,60 +122,56 @@ export class TaskService {
                 }
             }
 
-            await tx.taskEvent.create({
-                data: {
-                    taskId: id,
-                    boardId: task.boardId,
-                    type: TaskEventType.UPDATED,
-                },
-            });
-
-            this.boardGateway.emitBoardUpdate(task.boardId, {
-                type: 'task.updated',
-                taskId: task.id,
-            });
+            return task;
+        }).then(async (task) => {
+            // Publish domain event after transaction commits
+            const taskId = TaskId.from(task.id);
+            const boardId = BoardId.from(task.boardId);
+            await this.eventBus.publish(new TaskUpdatedEvent(taskId, boardId, updateData));
             return task;
         });
     }
 
-    getTaskById(id: string) {
-        return this.prisma.task.findUnique({
-            where: { id },
-            include: {
-                checklist: { orderBy: { position: 'asc' } },
-                tags: { include: { tag: true } },
-                hints: {
-                    orderBy: [
-                        { applied: 'asc' }, // Unapplied hints first
-                        { confidence: 'desc' }, // Higher confidence first
-                        { createdAt: 'desc' }, // Newer first
-                    ],
-                },
-            },
+    async getTaskById(id: string) {
+        const taskId = TaskId.from(id);
+        const task = await this.taskRepository.findById(taskId, {
+            includeChecklist: true,
+            includeTags: true,
+            includeHints: true,
         });
+
+        if (!task) {
+            return null;
+        }
+
+        // Map to Prisma format for backward compatibility
+        // TODO: In Phase 3, return domain entity instead
+        return {
+            ...task,
+            checklist: task.checklist || [],
+            tags: task.tags || [],
+            hints: task.hints || [],
+        };
     }
 
-    listTasksForBoard(boardId: string) {
-        return this.prisma.task.findMany({
-            where: { boardId },
-            include: {
-                column: true,
-                project: true,
-                tags: { include: { tag: true } },
-                hints: {
-                    orderBy: [
-                        { applied: 'asc' }, // Unapplied hints first
-                        { confidence: 'desc' }, // Higher confidence first
-                        { createdAt: 'desc' }, // Newer first
-                    ],
-                },
-            },
-            orderBy: [
-                { columnId: 'asc' },
-                { position: 'asc' },
-                { lastMovedAt: 'asc' }, // Fallback for tasks with same position
-            ],
+    async listTasksForBoard(boardId: string) {
+        const boardIdVO = BoardId.from(boardId);
+        const tasks = await this.taskRepository.findByBoardId(boardIdVO, {
+            includeColumn: true,
+            includeProject: true,
+            includeTags: true,
+            includeHints: true,
         });
+
+        // Map to Prisma format for backward compatibility
+        // TODO: In Phase 3, return domain entities instead
+        return tasks.map((task) => ({
+            ...task,
+            column: task.column,
+            project: task.project,
+            tags: task.tags || [],
+            hints: task.hints || [],
+        }));
     }
 
     /**
@@ -226,9 +180,9 @@ export class TaskService {
      */
     async moveTask(id: string, input: MoveTaskDto): Promise<MoveTaskResult> {
         // Get the current task
-        const task = await this.prisma.task.findUnique({
-            where: { id },
-            include: { column: true },
+        const taskId = TaskId.from(id);
+        const task = await this.taskRepository.findById(taskId, {
+            includeColumn: true,
         });
 
         if (!task) {
@@ -264,15 +218,15 @@ export class TaskService {
         }
 
         // Check the target column exists and belongs to the same board
-        const targetColumn = await this.prisma.column.findUnique({
-            where: { id: input.columnId },
-        });
+        const targetColumnId = ColumnId.from(input.columnId);
+        const targetColumn = await this.columnRepository.findById(targetColumnId);
 
         if (!targetColumn) {
             throw new NotFoundException(`Target column not found: ${input.columnId}`);
         }
 
-        if (targetColumn.boardId !== task.boardId) {
+        const taskBoardId = BoardId.from(task.boardId);
+        if (!(await this.columnRepository.belongsToBoard(targetColumnId, taskBoardId))) {
             throw new BadRequestException('Cannot move task to a column on a different board');
         }
 
@@ -287,19 +241,15 @@ export class TaskService {
             });
         }
 
+        // Get current max position in target column to determine new position
+        const maxPosition = await this.taskRepository.getMaxPositionInColumn(targetColumnId);
+
+        // If position is provided, use it (and reorder other tasks)
+        // Otherwise, place at the end
+        const targetPosition = input.position !== undefined ? input.position : maxPosition + 1;
+
         // Perform the move within a transaction
         const updatedTask = await this.prisma.$transaction(async (tx) => {
-            // Get current max position in target column to determine new position
-            const maxPositionResult = await tx.task.aggregate({
-                where: { columnId: input.columnId },
-                _max: { position: true },
-            });
-            const maxPosition = maxPositionResult._max.position ?? -1;
-
-            // If position is provided, use it (and reorder other tasks)
-            // Otherwise, place at the end
-            const targetPosition = input.position !== undefined ? input.position : maxPosition + 1;
-
             // If position is specified, reorder tasks in the target column
             if (input.position !== undefined) {
                 await this.reorderTaskInColumnTransaction(tx, id, input.columnId, targetPosition);
@@ -318,33 +268,24 @@ export class TaskService {
                 },
             });
 
-            // Create TaskEvent for the move
-            await tx.taskEvent.create({
-                data: {
-                    taskId: id,
-                    boardId: task.boardId,
-                    type: TaskEventType.MOVED,
-                    fromColumnId,
-                    toColumnId: input.columnId,
-                    payload: {
-                        fromColumnName: task.column.name,
-                        toColumnName: targetColumn.name,
-                        wipOverride: input.forceWipOverride || false,
-                        position: targetPosition,
-                    },
-                },
-            });
-
             return updated;
-        });
-
-        // Emit WebSocket update
-        this.boardGateway.emitBoardUpdate(task.boardId, {
-            type: 'task.moved',
-            taskId: id,
-            fromColumnId,
-            toColumnId: input.columnId,
-            timestamp: new Date().toISOString(),
+        }).then(async (updated) => {
+            // Publish domain event after transaction commits
+            const taskId = TaskId.from(id);
+            const boardId = BoardId.from(task.boardId);
+            const fromColumnIdVO = fromColumnId ? ColumnId.from(fromColumnId) : null;
+            const toColumnIdVO = ColumnId.from(input.columnId);
+            await this.eventBus.publish(
+                new TaskMovedEvent(
+                    taskId,
+                    boardId,
+                    fromColumnIdVO,
+                    toColumnIdVO,
+                    targetPosition,
+                    input.forceWipOverride || false,
+                ),
+            );
+            return updated;
         });
 
         // Get updated WIP status
@@ -452,46 +393,53 @@ export class TaskService {
      * Get tasks that are stale (not moved in X days)
      */
     async getStaleTasks(boardId: string, thresholdDays: number = 7) {
-        const thresholdDate = new Date();
-        thresholdDate.setDate(thresholdDate.getDate() - thresholdDays);
-
-        return this.prisma.task.findMany({
-            where: {
-                boardId,
-                isDone: false,
-                lastMovedAt: { lt: thresholdDate },
-                column: {
-                    type: { notIn: ['DONE', 'ARCHIVE', 'SOMEDAY'] },
-                },
-            },
-            include: {
-                column: true,
-                project: true,
-            },
-            orderBy: { lastMovedAt: 'asc' },
+        // Use repository method for finding stale tasks
+        // Note: Repository method doesn't filter by column type, so we'll filter after
+        const staleTasks = await this.taskRepository.findStaleTasks(thresholdDays);
+        
+        // Filter by board and column type
+        const boardIdVO = BoardId.from(boardId);
+        const boardTasks = await this.taskRepository.findByBoardId(boardIdVO, {
+            includeColumn: true,
+            includeProject: true,
         });
+
+        // Filter tasks that are stale, not done, and not in excluded column types
+        const excludedTypes = ['DONE', 'ARCHIVE', 'SOMEDAY'];
+        const staleTaskIds = new Set(staleTasks.map(t => t.id));
+        
+        return boardTasks
+            .filter(task => 
+                staleTaskIds.has(task.id) && 
+                !task.isDone && 
+                task.column &&
+                !excludedTypes.includes(task.column.type)
+            )
+            .sort((a, b) => a.lastMovedAt.getTime() - b.lastMovedAt.getTime());
     }
 
     /**
      * Mark a task as stale
      */
     async markStale(id: string, isStale: boolean = true) {
+        const taskId = TaskId.from(id);
+        const task = await this.taskRepository.update(taskId, { stale: isStale });
+
         return this.prisma.$transaction(async (tx) => {
-            const task = await tx.task.update({
+            // Get task for boardId
+            const taskData = await tx.task.findUnique({
                 where: { id },
-                data: { stale: isStale },
+                select: { boardId: true },
             });
 
+            return task;
+        }).then(async (task) => {
+            // Publish domain event after transaction commits
             if (isStale) {
-                await tx.taskEvent.create({
-                    data: {
-                        taskId: id,
-                        boardId: task.boardId,
-                        type: TaskEventType.STALE,
-                    },
-                });
+                const taskId = TaskId.from(id);
+                const boardId = BoardId.from(task.boardId);
+                await this.eventBus.publish(new TaskStaleEvent(taskId, boardId, isStale));
             }
-
             return task;
         });
     }
@@ -500,14 +448,14 @@ export class TaskService {
      * Delete a task and all related records
      */
     async deleteTask(id: string) {
-        const task = await this.prisma.task.findUnique({
-            where: { id },
-            select: { boardId: true },
-        });
+        const taskId = TaskId.from(id);
+        const task = await this.taskRepository.findById(taskId);
 
         if (!task) {
             throw new NotFoundException(`Task not found: ${id}`);
         }
+
+        const boardId = task.boardId;
 
         // Delete task and all related records in a transaction
         // TaskTag has onDelete: Cascade, but TaskEvent and ChecklistItem don't
@@ -523,15 +471,15 @@ export class TaskService {
             });
 
             // Delete the task itself (TaskTag will be deleted by cascade)
+            // Note: Using tx directly since repository doesn't support transactions yet
             await tx.task.delete({
-                where: { id },
+                where: { id: id },
             });
-        });
-
-        this.boardGateway.emitBoardUpdate(task.boardId, {
-            type: 'task.deleted',
-            taskId: id,
-            timestamp: new Date().toISOString(),
+        }).then(async () => {
+            // Publish domain event after transaction commits
+            const taskId = TaskId.from(id);
+            const boardIdVO = BoardId.from(boardId);
+            await this.eventBus.publish(new TaskDeletedEvent(taskId, boardIdVO));
         });
 
         return { success: true };

@@ -57,6 +57,7 @@ model User {
   rules              Rule[]
   recurringTemplates RecurringTemplate[]
   defaultBoard       Board?              @relation("UserDefaultBoard", fields: [defaultBoardId], references: [id], onDelete: SetNull)
+  emailActionTokens  EmailActionToken[]
 
   @@index([defaultBoardId])
 }
@@ -144,6 +145,7 @@ model Task {
   checklist      ChecklistItem[]
   events         TaskEvent[]
   hints          Hint[]
+  emailActionTokens EmailActionToken[]
 
   @@index([boardId])
   @@index([columnId])
@@ -265,4 +267,22 @@ model Hint {
   @@index([agentId])
   @@index([hintType])
   @@index([applied])
+}
+
+model EmailActionToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique // Secure random token for email links
+  action    String   @default("complete") // Action type: "complete", "view", etc.
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([taskId])
+  @@index([userId])
+  @@index([expiresAt])
 }

@@ -2,14 +2,14 @@
 ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
-ENV PNPM_HOME="/home/node/.local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
+ENV PNPM_HOME="/home/node/.local/share/pnpm" \
+    PATH="$PNPM_HOME:$PATH"
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps ./apps
 COPY packages ./packages
-RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @personal-kanban/web build
+RUN pnpm install --frozen-lockfile && \
+    pnpm --filter @personal-kanban/web build
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html

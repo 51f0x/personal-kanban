@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ColumnType, TaskEventType } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { BoardGateway } from '../realtime/board.gateway';
 import { ClarifyTaskDto } from './dto/clarify-task.input';
 

@@ -1,14 +1,16 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '@personal-kanban/shared';
 import type { Job } from 'bullmq';
 import { TaskProcessorService } from './task-processor.service';
+import { AgentResultSenderService } from './agent-result-sender.service';
 import type { AgentProgressCallback } from './types';
 
 interface AgentProcessingJobData {
     taskId: string;
-    boardId: string;
-    progressCallbackUrl: string;
+    boardId?: string; // Optional, can be extracted from task if needed
+    progressCallbackUrl?: string; // Deprecated - kept for backward compatibility
 }
 
 /**
@@ -24,6 +26,8 @@ export class AgentJobProcessor extends WorkerHost {
     constructor(
         private readonly taskProcessorService: TaskProcessorService,
         private readonly configService: ConfigService,
+        private readonly prisma: PrismaService,
+        private readonly resultSenderService: AgentResultSenderService,
     ) {
         super();
         this.apiBaseUrl = this.configService.get<string>('API_URL', 'http://localhost:3000');
@@ -31,60 +35,38 @@ export class AgentJobProcessor extends WorkerHost {
     }
 
     async process(job: Job<AgentProcessingJobData>): Promise<void> {
-        const { taskId, boardId, progressCallbackUrl } = job.data;
+        const { taskId, boardId } = job.data;
 
         this.logger.log(`Processing agent job for task ${taskId}`);
 
         try {
-            // Create progress callback that sends HTTP requests to API
-            const progressCallback: AgentProgressCallback = async (progress) => {
-                try {
-                    const callbackUrl =
-                        progressCallbackUrl || `${this.apiBaseUrl}/api/v1/agents/progress/update`;
-
-                    // Include boardId in progress details for the API
-                    const progressWithBoardId = {
-                        ...progress,
-                        details: {
-                            ...progress.details,
-                            boardId,
-                        },
-                    };
-
-                    // Prepare headers with internal service token for authentication
-                    const headers: Record<string, string> = {
-                        'Content-Type': 'application/json',
-                    };
-
-                    // Add internal service token if configured
-                    if (this.internalServiceToken) {
-                        headers['x-internal-service-token'] = this.internalServiceToken;
-                    }
-
-                    // Make HTTP callback to API
-                    const response = await fetch(callbackUrl, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(progressWithBoardId),
-                    });
-
-                    if (!response.ok) {
-                        this.logger.warn(`Progress callback failed: ${response.statusText}`);
-                    }
-                } catch (error) {
-                    this.logger.warn(`Failed to send progress callback: ${error}`);
-                    // Don't throw - progress callbacks are non-blocking
+            // Get boardId from task if not provided
+            let taskBoardId = boardId;
+            if (!taskBoardId) {
+                const task = await this.prisma.task.findUnique({
+                    where: { id: taskId },
+                    select: { boardId: true },
+                });
+                if (!task) {
+                    throw new Error(`Task ${taskId} not found`);
                 }
-            };
+                taskBoardId = task.boardId;
+            }
 
-            // Process task with agents
-            // updateTask: false means hints will be created but task won't be auto-updated
-            await this.taskProcessorService.processTaskWithAgents(taskId, {
-                updateTask: false, // Only create hints, don't auto-apply updates
+            // Process task with agents and get results
+            // Progress events are now published via event bus instead of HTTP callbacks
+            // updateTask: true means results will be applied to task and hints created
+            const results = await this.taskProcessorService.processTaskWithAgents(taskId, {
+                updateTask: true, // Apply results to task and create hints
                 skipWebContent: false,
                 skipSummarization: false,
-                onProgress: progressCallback,
+                // onProgress callback removed - events are published automatically
             });
+
+            // Send results back to API via queue
+            if (results) {
+                await this.resultSenderService.sendResult(taskId, taskBoardId, results);
+            }
 
             this.logger.log(`Completed agent processing for task ${taskId}`);
         } catch (error) {

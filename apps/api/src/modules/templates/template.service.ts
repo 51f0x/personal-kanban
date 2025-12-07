@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { CreateTemplateDto } from './dto/create-template.input';
 import { UpdateTemplateDto } from './dto/update-template.input';
 

@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
-import type { Prisma, TaskContext } from '@prisma/client';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { PrismaService } from '@personal-kanban/shared';
 import { WebContentAgent } from './web-content.agent';
 import { ContentSummarizerAgent } from './content-summarizer.agent';
 import { TaskAnalyzerAgent } from './task-analyzer.agent';
@@ -8,7 +7,14 @@ import { ContextExtractorAgent } from './context-extractor.agent';
 import { ActionExtractorAgent } from './action-extractor.agent';
 import { ToMarkdownAgent } from './to-markdown.agent';
 import { AgentSelectorAgent } from './agent-selector.agent';
-import { HintService } from './hint.service';
+import { TaskHelpAgent } from './task-help.agent';
+import {
+    IEventBus,
+    AgentProgressEvent,
+    AgentCompletedEvent,
+    TaskId,
+    BoardId,
+} from '@personal-kanban/shared';
 import type {
     AgentProcessingResult,
     AgentProcessingProgress,
@@ -18,8 +24,10 @@ import type {
     TaskAnalysisResult,
     ContextExtractionResult,
     ActionExtractionResult,
+    TaskHelpResult,
     MarkdownFormatResult,
 } from './types';
+import type { ActionItem } from './action-extractor.agent';
 
 /**
  * Agent Orchestrator
@@ -34,6 +42,7 @@ export class AgentOrchestrator {
 
     constructor(
         private readonly prisma: PrismaService,
+        @Inject('IEventBus') private readonly eventBus: IEventBus,
         private readonly webContentAgent: WebContentAgent,
         private readonly contentSummarizerAgent: ContentSummarizerAgent,
         private readonly taskAnalyzerAgent: TaskAnalyzerAgent,
@@ -41,7 +50,7 @@ export class AgentOrchestrator {
         private readonly actionExtractorAgent: ActionExtractorAgent,
         private readonly toMarkdownAgent: ToMarkdownAgent,
         private readonly agentSelectorAgent: AgentSelectorAgent,
-        private readonly hintService: HintService,
+        private readonly taskHelpAgent: TaskHelpAgent,
     ) {}
 
     /**
@@ -63,7 +72,11 @@ export class AgentOrchestrator {
         const progressHistory: AgentProcessingProgress[] = [];
         const onProgress = options?.onProgress;
 
-        // Helper to emit progress updates
+        // Will be set after task is fetched
+        let taskIdVO: TaskId | null = null;
+        let boardIdVO: BoardId | null = null;
+
+        // Helper to emit progress updates (both callback and event)
         const emitProgress = async (
             stage: AgentProcessingProgress['stage'],
             progress: number,
@@ -80,6 +93,25 @@ export class AgentOrchestrator {
             };
             progressHistory.push(progressUpdate);
 
+            // Publish domain event for progress (if taskId and boardId are available)
+            if (taskIdVO && boardIdVO) {
+                try {
+                    await this.eventBus.publish(
+                        new AgentProgressEvent(
+                            taskIdVO,
+                            boardIdVO,
+                            stage,
+                            progress,
+                            message,
+                            details as Record<string, unknown> | undefined,
+                        ),
+                    );
+                } catch (error) {
+                    this.logger.warn('Failed to publish progress event', error);
+                }
+            }
+
+            // Also call callback if provided (for backward compatibility)
             if (onProgress) {
                 try {
                     await onProgress(progressUpdate);
@@ -90,16 +122,20 @@ export class AgentOrchestrator {
         };
 
         try {
-            await emitProgress('initializing', 0, 'Starting agent processing...');
-
-            // Fetch the task
+            // Fetch the task first to get boardId for events
             const task = await this.prisma.task.findUnique({
                 where: { id: taskId },
+                select: { id: true, boardId: true, title: true, description: true, metadata: true },
             });
 
             if (!task) {
                 throw new Error(`Task not found: ${taskId}`);
             }
+
+            taskIdVO = TaskId.from(taskId);
+            boardIdVO = BoardId.from(task.boardId);
+
+            await emitProgress('initializing', 0, 'Starting agent processing...');
 
             this.logger.log(`Processing task ${taskId} with multiple agents`);
 
@@ -257,37 +293,129 @@ export class AgentOrchestrator {
                 this.logger.log('Skipping summarization - not selected by AI');
             }
 
-            // Step 4: Run selected analysis agents in parallel
+            // Step 4: Extract actions early to steer other agents
             const contentSummary = summarization?.summary || webContent?.title || undefined;
             const enhancedDescription = task.description
                 ? `${task.description}\n\n${contentSummary || ''}`.trim()
                 : contentSummary;
 
-            await emitProgress('analyzing-task', 60, 'Running selected AI agents...');
+            let actionExtraction: ActionExtractionResult | undefined;
+            if (agentSelection.shouldUseActionExtraction) {
+                await emitProgress('extracting-actions', 55, 'Extracting actions to guide analysis...', {
+                    agentId: 'action-extractor-agent',
+                });
+                this.logger.log('Extracting actions early to steer other agents');
+
+                actionExtraction = await this.actionExtractorAgent.extractActions(
+                    task.title,
+                    enhancedDescription,
+                    contentSummary,
+                );
+
+                if (actionExtraction.success) {
+                    await emitProgress(
+                        'extracting-actions',
+                        58,
+                        `Extracted ${actionExtraction.totalActions || 0} actions`,
+                        {
+                            agentId: 'action-extractor-agent',
+                            confidence: actionExtraction.confidence,
+                            actionsCount: actionExtraction.totalActions || 0,
+                        },
+                    );
+                    this.logger.log(
+                        `Extracted ${actionExtraction.totalActions || 0} actions to guide other agents`,
+                    );
+                } else {
+                    errors.push(`Action extraction failed: ${actionExtraction.error}`);
+                    await emitProgress(
+                        'error',
+                        58,
+                        `Action extraction failed: ${actionExtraction.error}`,
+                        {
+                            agentId: 'action-extractor-agent',
+                            error: actionExtraction.error,
+                        },
+                    );
+                    this.logger.warn(`Failed to extract actions: ${actionExtraction.error}`);
+                }
+            } else {
+                this.logger.log('Skipping action extraction - not selected by AI');
+            }
+
+            // Step 5: Generate task help if we have web content (can use actions to guide)
+            let taskHelp: TaskHelpResult | undefined;
+            if (webContent?.success && (webContent.textContent || summarization?.summary)) {
+                await emitProgress(
+                    'generating-help',
+                    60,
+                    'Generating comprehensive help from content...',
+                    {
+                        agentId: 'task-help-agent',
+                    },
+                );
+                this.logger.log('Generating task help from web content');
+
+                taskHelp = await this.taskHelpAgent.generateHelp(
+                    task.title,
+                    task.description || undefined,
+                    webContent.textContent,
+                    summarization?.summary,
+                    actionExtraction?.actions,
+                );
+
+                if (taskHelp.success) {
+                    await emitProgress(
+                        'generating-help',
+                        63,
+                        'Task help generated',
+                        {
+                            agentId: 'task-help-agent',
+                            confidence: taskHelp.confidence,
+                            helpTextLength: taskHelp.helpText?.length || 0,
+                        },
+                    );
+                } else {
+                    errors.push(`Task help generation failed: ${taskHelp.error}`);
+                    await emitProgress(
+                        'error',
+                        63,
+                        `Help generation failed: ${taskHelp.error}`,
+                        {
+                            agentId: 'task-help-agent',
+                            error: taskHelp.error,
+                        },
+                    );
+                    this.logger.warn(`Failed to generate task help: ${taskHelp.error}`);
+                }
+            }
+
+            // Step 6: Run selected analysis agents in parallel (can use actions to guide)
+            await emitProgress('analyzing-task', 65, 'Running selected AI agents...');
             this.logger.log(
-                `Running parallel agent analysis (selected agents: TaskAnalysis=${agentSelection.shouldUseTaskAnalysis}, ContextExtraction=${agentSelection.shouldUseContextExtraction}, ActionExtraction=${agentSelection.shouldUseActionExtraction})...`,
+                `Running parallel agent analysis (selected agents: TaskAnalysis=${agentSelection.shouldUseTaskAnalysis}, ContextExtraction=${agentSelection.shouldUseContextExtraction})...`,
             );
 
             // Build array of agent promises based on selection
             const agentPromises: Array<
-                Promise<
-                    | TaskAnalysisResult
-                    | ContextExtractionResult
-                    | ActionExtractionResult
-                    | undefined
-                >
+                Promise<TaskAnalysisResult | ContextExtractionResult | undefined>
             > = [];
             const agentNames: string[] = [];
 
             if (agentSelection.shouldUseTaskAnalysis) {
                 agentPromises.push(
                     this.taskAnalyzerAgent
-                        .analyzeTask(task.title, enhancedDescription, contentSummary)
+                        .analyzeTask(
+                            task.title,
+                            enhancedDescription,
+                            contentSummary,
+                            actionExtraction?.actions,
+                        )
                         .then(async (result) => {
                             if (result?.success) {
                                 await emitProgress(
                                     'analyzing-task',
-                                    70,
+                                    75,
                                     'Task analysis completed',
                                     {
                                         agentId: 'task-analyzer-agent',
@@ -301,7 +429,7 @@ export class AgentOrchestrator {
                             errors.push(`Task analysis failed: ${err.message}`);
                             await emitProgress(
                                 'error',
-                                70,
+                                75,
                                 `Task analysis failed: ${err.message}`,
                                 {
                                     agentId: 'task-analyzer-agent',
@@ -321,12 +449,17 @@ export class AgentOrchestrator {
             if (agentSelection.shouldUseContextExtraction) {
                 agentPromises.push(
                     this.contextExtractorAgent
-                        .extractContext(task.title, enhancedDescription, contentSummary)
+                        .extractContext(
+                            task.title,
+                            enhancedDescription,
+                            contentSummary,
+                            actionExtraction?.actions,
+                        )
                         .then(async (result) => {
                             if (result?.success) {
                                 await emitProgress(
                                     'extracting-context',
-                                    80,
+                                    85,
                                     'Context extraction completed',
                                     {
                                         agentId: 'context-extractor-agent',
@@ -341,7 +474,7 @@ export class AgentOrchestrator {
                             errors.push(`Context extraction failed: ${err.message}`);
                             await emitProgress(
                                 'error',
-                                80,
+                                85,
                                 `Context extraction failed: ${err.message}`,
                                 {
                                     agentId: 'context-extractor-agent',
@@ -356,46 +489,6 @@ export class AgentOrchestrator {
                 this.logger.log('Skipping context extraction - not selected by AI');
                 agentPromises.push(Promise.resolve(undefined));
                 agentNames.push('contextExtraction');
-            }
-
-            if (agentSelection.shouldUseActionExtraction) {
-                agentPromises.push(
-                    this.actionExtractorAgent
-                        .extractActions(task.title, enhancedDescription, contentSummary)
-                        .then(async (result) => {
-                            if (result?.success) {
-                                await emitProgress(
-                                    'extracting-actions',
-                                    90,
-                                    `Extracted ${result.totalActions || 0} actions`,
-                                    {
-                                        agentId: 'action-extractor-agent',
-                                        confidence: result.confidence,
-                                        actionsCount: result.totalActions || 0,
-                                    },
-                                );
-                            }
-                            return result;
-                        })
-                        .catch(async (err) => {
-                            errors.push(`Action extraction failed: ${err.message}`);
-                            await emitProgress(
-                                'error',
-                                90,
-                                `Action extraction failed: ${err.message}`,
-                                {
-                                    agentId: 'action-extractor-agent',
-                                    error: err.message,
-                                },
-                            );
-                            return undefined;
-                        }),
-                );
-                agentNames.push('actionExtraction');
-            } else {
-                this.logger.log('Skipping action extraction - not selected by AI');
-                agentPromises.push(Promise.resolve(undefined));
-                agentNames.push('actionExtraction');
             }
 
             // Run selected agents in parallel with timeout protection
@@ -415,10 +508,9 @@ export class AgentOrchestrator {
                 }),
             );
 
-            // Map results to variables - results array always has 3 elements in order: taskAnalysis, contextExtraction, actionExtraction
+            // Map results to variables - results array has 2 elements in order: taskAnalysis, contextExtraction
             const taskAnalysis = results[0];
             const contextExtraction = results[1];
-            const actionExtraction = results[2];
 
             // Note: Markdown conversion is done AFTER hints are auto-applied (in task-processor.service.ts)
             // This ensures markdown conversion uses the final description after high-confidence hints are applied
@@ -428,6 +520,7 @@ export class AgentOrchestrator {
             const successfulAgents = Object.values({
                 webContent,
                 summarization,
+                taskHelp,
                 taskAnalysis,
                 contextExtraction,
                 actionExtraction,
@@ -453,6 +546,7 @@ export class AgentOrchestrator {
                 url,
                 webContent,
                 summarization,
+                taskHelp,
                 taskAnalysis,
                 contextExtraction,
                 actionExtraction,
@@ -467,6 +561,23 @@ export class AgentOrchestrator {
                 `Task ${taskId} processed in ${processingTimeMs}ms ` +
                     `(${errors.length} errors, ${Object.values(result).filter((v) => v && typeof v === 'object' && 'success' in v && v.success).length} successful agents)`,
             );
+
+            // Publish completion event
+            if (taskIdVO && boardIdVO) {
+                try {
+                    await this.eventBus.publish(
+                        new AgentCompletedEvent(
+                            taskIdVO,
+                            boardIdVO,
+                            processingTimeMs,
+                            successfulAgents,
+                            errors.length > 0 ? errors : undefined,
+                        ),
+                    );
+                } catch (error) {
+                    this.logger.warn('Failed to publish completion event', error);
+                }
+            }
 
             return result;
         } catch (error) {
@@ -487,175 +598,4 @@ export class AgentOrchestrator {
         }
     }
 
-    /**
-     * Apply agent results to a task (update task with agent insights)
-     */
-    async applyResultsToTask(
-        taskId: string,
-        results: AgentProcessingResult,
-        options?: {
-            updateTitle?: boolean;
-            updateDescription?: boolean;
-            updateContext?: boolean;
-            updateTags?: boolean;
-            updatePriority?: boolean;
-            addChecklistFromActions?: boolean;
-            onProgress?: AgentProgressCallback;
-        },
-    ): Promise<void> {
-        const onProgress = options?.onProgress;
-
-        const emitProgress = async (
-            stage: AgentProcessingProgress['stage'],
-            progress: number,
-            message: string,
-            details?: AgentProcessingProgress['details'],
-        ) => {
-            const progressUpdate: AgentProcessingProgress = {
-                taskId,
-                stage,
-                progress,
-                message,
-                details,
-                timestamp: new Date().toISOString(),
-            };
-
-            if (onProgress) {
-                try {
-                    await onProgress(progressUpdate);
-                } catch (callbackError) {
-                    this.logger.warn('Progress callback failed during apply', callbackError);
-                }
-            }
-        };
-
-        try {
-            await emitProgress('applying-results', 0, 'Creating hints from agent results...');
-
-            // Create hints from all agent results first
-            await this.hintService.createHintsFromResults(taskId, results);
-
-            await emitProgress('applying-results', 20, 'Applying selected hints to task...');
-
-            const task = await this.prisma.task.findUnique({
-                where: { id: taskId },
-                include: { checklist: true, hints: true },
-            });
-
-            if (!task) {
-                throw new Error(`Task not found: ${taskId}`);
-            }
-
-            const updates: {
-                title?: string;
-                description?: string;
-                context?: TaskContext;
-                metadata?: Prisma.InputJsonValue;
-            } = {};
-
-            const tagsToAdd: string[] = [];
-            const checklistItems: Array<{ title: string; isDone: boolean; position: number }> = [];
-
-            // Update title if suggested
-            if (options?.updateTitle && results.taskAnalysis?.suggestedTitle) {
-                updates.title = results.taskAnalysis.suggestedTitle;
-            }
-
-            // Update description if suggested
-            // Note: Markdown conversion happens AFTER hints are auto-applied (in task-processor.service.ts)
-            // So we don't apply markdown here - it's already been applied
-            if (options?.updateDescription) {
-                const suggestedDesc = results.taskAnalysis?.suggestedDescription;
-                const summary = results.summarization?.summary;
-                const currentDesc = task.description || '';
-
-                if (suggestedDesc || summary) {
-                    const parts = [
-                        currentDesc,
-                        suggestedDesc,
-                        summary && summary !== suggestedDesc ? `\n\n[Summary]\n${summary}` : null,
-                    ].filter(Boolean);
-
-                    updates.description = parts.join('\n\n').trim();
-                }
-            }
-
-            // Update context
-            if (options?.updateContext) {
-                const context: TaskContext | undefined =
-                    results.taskAnalysis?.context || results.contextExtraction?.context;
-                if (context) {
-                    updates.context = context;
-                }
-            }
-
-            // Collect tags
-            if (options?.updateTags) {
-                const tags = [
-                    ...(results.taskAnalysis?.suggestedTags || []),
-                    ...(results.contextExtraction?.tags || []),
-                ];
-                tagsToAdd.push(...tags);
-            }
-
-            // Collect checklist items from actions
-            if (options?.addChecklistFromActions && results.actionExtraction?.actions) {
-                const existingCount = task.checklist.length;
-                results.actionExtraction.actions.forEach((action, index) => {
-                    checklistItems.push({
-                        title: action.description,
-                        isDone: false,
-                        position: existingCount + index,
-                    });
-                });
-            }
-
-            // Store minimal metadata (processing info, not the full results)
-            // Hints are created separately at the beginning of this method
-            const existingMetadata = (task.metadata || {}) as Record<string, unknown>;
-            updates.metadata = {
-                ...existingMetadata,
-                agentProcessing: {
-                    processedAt: new Date().toISOString(),
-                    processingTimeMs: results.processingTimeMs,
-                    url: results.url,
-                    hintCount: await this.prisma.hint.count({ where: { taskId } }),
-                    errors: results.errors,
-                },
-            } as Prisma.InputJsonValue;
-
-            // Apply updates in a transaction
-            await emitProgress('applying-results', 50, 'Saving updates to task...');
-
-            await this.prisma.$transaction(async (tx) => {
-                if (Object.keys(updates).length > 0) {
-                    await tx.task.update({
-                        where: { id: taskId },
-                        data: updates,
-                    });
-                }
-
-                // Add checklist items if any
-                if (checklistItems.length > 0) {
-                    await tx.checklistItem.createMany({
-                        data: checklistItems.map((item) => ({
-                            taskId,
-                            ...item,
-                        })),
-                    });
-                }
-            });
-
-            await emitProgress('applying-results', 100, 'Results applied successfully', {
-                checklistItemsAdded: checklistItems.length,
-                tagsToAdd: tagsToAdd.length,
-            });
-
-            this.logger.log(`Applied agent results to task ${taskId}`);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.logger.error(`Error applying results to task ${taskId}: ${errorMessage}`);
-            throw error;
-        }
-    }
 }

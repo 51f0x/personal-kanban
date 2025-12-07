@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BaseAgent } from './base-agent';
-import { parseAndValidateJson } from '../../shared/utils';
+import { parseAndValidateJson } from '@personal-kanban/shared';
 import { summarizationResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateContentSize, INPUT_LIMITS } from '../../shared/utils/input-validator.util';
 
@@ -119,7 +119,9 @@ export class ContentSummarizerAgent extends BaseAgent {
             const parseResult = parseAndValidateJson(
                 summaryText,
                 summarizationResponseSchema,
-                this.logger,
+                {
+                    warn: (msg, ...args) => this.logger.warn(msg, ...args),
+                },
                 'content summarization',
             );
 
@@ -153,8 +155,10 @@ export class ContentSummarizerAgent extends BaseAgent {
                 };
             }
             // Fallback: use the raw response as summary
+            const errorMessage =
+                'error' in parseResult ? parseResult.error : 'Unknown validation error';
             this.logger.warn('JSON validation failed, using raw response as summary', {
-                error: parseResult.error,
+                error: errorMessage,
             });
             const fallbackSummary = summaryText.trim();
             return {
@@ -167,7 +171,7 @@ export class ContentSummarizerAgent extends BaseAgent {
                 metadata: {
                     model: this.model,
                     fallback: true,
-                    validationError: parseResult.error,
+                    validationError: errorMessage,
                 },
             };
         } catch (error) {

@@ -1,7 +1,7 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { PrismaService } from '../modules/database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { Public } from '../decorators/public.decorator';
 
 interface HealthCheckResult {

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { CreateChecklistItemDto, UpdateChecklistItemDto, ReorderChecklistDto } from './dto/checklist.input';
 
 @Injectable()

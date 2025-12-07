@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
+import { DatabaseModule } from '@personal-kanban/shared';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { ClarificationController } from './clarification.controller';
 import { ClarificationService } from './clarification.service';

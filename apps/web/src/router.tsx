@@ -92,6 +92,55 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      {/* Support plural /boards/:boardId routes for compatibility */}
+      <Route
+        path="/boards/:boardId/stale"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/boards/:boardId/someday"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/boards/:boardId/waiting"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/boards/:boardId/projects"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/boards/:boardId/analytics"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/boards/:boardId"
+        element={
+          <ProtectedRoute>
+            <BoardView />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch-all route for 404 errors */}
       <Route

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '@personal-kanban/shared';
 import { CreateTagDto } from './dto/create-tag.input';
 import { UpdateTagDto } from './dto/update-tag.input';
 
