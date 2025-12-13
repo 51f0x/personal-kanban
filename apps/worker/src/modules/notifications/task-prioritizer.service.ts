@@ -1,7 +1,7 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
-import { InterContainerQueueService } from '../inter-container/inter-container-queue.service';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { GetTasksRequest, GetTasksResponse } from '@personal-kanban/shared';
 import { ColumnType, TaskPriority } from '@prisma/client';
+import { InterContainerQueueService } from '../inter-container/inter-container-queue.service';
 
 export interface PrioritizedTask {
     id: string;
@@ -32,10 +32,7 @@ export class TaskPrioritizerService {
      * Returns tasks sorted by priority score (highest first)
      * Only returns tasks from INPUT columns
      */
-    async getPrioritizedTasksForUser(
-        userId: string,
-        limit: number = 10,
-    ): Promise<PrioritizedTask[]> {
+    async getPrioritizedTasksForUser(userId: string, limit = 10): Promise<PrioritizedTask[]> {
         // Request tasks from API via queue
         const request: GetTasksRequest = {
             type: 'get-tasks',
@@ -56,9 +53,7 @@ export class TaskPrioritizerService {
             const prioritizedTasks = response.tasks
                 .map((task) => {
                     // Convert priority string back to enum
-                    const priority = task.priority
-                        ? (task.priority as TaskPriority)
-                        : undefined;
+                    const priority = task.priority ? (task.priority as TaskPriority) : undefined;
 
                     return {
                         id: task.id,
@@ -218,7 +213,7 @@ export class TaskPrioritizerService {
         const numberMatch = duration.match(/\d+/);
         if (!numberMatch) return 0;
 
-        const number = parseInt(numberMatch[0], 10);
+        const number = Number.parseInt(numberMatch[0], 10);
 
         if (lower.includes('hour') || lower.includes('hr') || lower.includes('h')) {
             return number * 60;

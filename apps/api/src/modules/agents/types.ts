@@ -4,17 +4,17 @@
  */
 
 export type AgentProcessingStage =
-  | 'initializing'
-  | 'detecting-url'
-  | 'downloading-content'
-  | 'extracting-text'
-  | 'summarizing-content'
-  | 'analyzing-task'
-  | 'extracting-context'
-  | 'extracting-actions'
-  | 'applying-results'
-  | 'completed'
-  | 'error';
+  | "initializing"
+  | "detecting-url"
+  | "downloading-content"
+  | "extracting-text"
+  | "summarizing-content"
+  | "analyzing-task"
+  | "extracting-context"
+  | "extracting-actions"
+  | "applying-results"
+  | "completed"
+  | "error";
 
 export interface AgentProcessingProgress {
   taskId: string;
@@ -31,4 +31,3 @@ export interface AgentProcessingProgress {
   };
   timestamp: string;
 }
-

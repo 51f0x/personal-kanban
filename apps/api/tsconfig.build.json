@@ -1,12 +1,12 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "baseUrl": "../../",
-    "declaration": true,
-    "sourceMap": false,
-    "paths": {
-      "@personal-kanban/shared": ["packages/shared/dist/index.d.ts"],
-      "@personal-kanban/shared/*": ["packages/shared/dist/*"]
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "baseUrl": "../../",
+        "declaration": true,
+        "sourceMap": false,
+        "paths": {
+            "@personal-kanban/shared": ["packages/shared/dist/index.d.ts"],
+            "@personal-kanban/shared/*": ["packages/shared/dist/*"]
+        }
     }
-  }
 }

@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateRuleDto } from './dto/create-rule.input';
-import { UpdateRuleDto } from './dto/update-rule.input';
+import type { Prisma } from "@prisma/client";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import type { CreateRuleDto } from "./dto/create-rule.input";
+import type { UpdateRuleDto } from "./dto/update-rule.input";
 
 @Injectable()
 export class RuleService {
@@ -59,7 +60,7 @@ export class RuleService {
   async listRulesForBoard(boardId: string) {
     return this.prisma.rule.findMany({
       where: { boardId },
-      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
       include: {
         owner: { select: { id: true, name: true } },
       },
@@ -123,7 +124,7 @@ export class RuleService {
         boardId,
         enabled: true,
       },
-      orderBy: [{ priority: 'asc' }],
+      orderBy: [{ priority: "asc" }],
     });
 
     // Filter by trigger type (JSON field)
@@ -164,18 +165,34 @@ export class RuleService {
     const errors: string[] = [];
 
     // Validate trigger
-    const validTriggerTypes = ['task.created', 'task.moved', 'task.completed', 'stale', 'schedule', 'email.received'];
+    const validTriggerTypes = [
+      "task.created",
+      "task.moved",
+      "task.completed",
+      "stale",
+      "schedule",
+      "email.received",
+    ];
     if (!validTriggerTypes.includes(input.trigger.type)) {
       errors.push(`Invalid trigger type: ${input.trigger.type}`);
     }
 
     // Validate schedule trigger has schedule config
-    if (input.trigger.type === 'schedule' && !input.trigger.config?.schedule) {
-      errors.push('Schedule trigger requires a schedule config');
+    if (input.trigger.type === "schedule" && !input.trigger.config?.schedule) {
+      errors.push("Schedule trigger requires a schedule config");
     }
 
     // Validate actions
-    const validActionTypes = ['createTask', 'updateTask', 'moveTask', 'addTag', 'removeTag', 'addChecklist', 'notify', 'stop'];
+    const validActionTypes = [
+      "createTask",
+      "updateTask",
+      "moveTask",
+      "addTag",
+      "removeTag",
+      "addChecklist",
+      "notify",
+      "stop",
+    ];
     for (const action of input.actions) {
       if (!validActionTypes.includes(action.type)) {
         errors.push(`Invalid action type: ${action.type}`);
@@ -183,7 +200,20 @@ export class RuleService {
     }
 
     // Validate conditions
-    const validOperators = ['eq', 'ne', 'contains', 'in', 'notIn', 'gt', 'lt', 'gte', 'lte', 'between', 'exists', 'notExists'];
+    const validOperators = [
+      "eq",
+      "ne",
+      "contains",
+      "in",
+      "notIn",
+      "gt",
+      "lt",
+      "gte",
+      "lte",
+      "between",
+      "exists",
+      "notExists",
+    ];
     for (const condition of input.conditions ?? []) {
       if (!validOperators.includes(condition.operator)) {
         errors.push(`Invalid operator: ${condition.operator}`);

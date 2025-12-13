@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@personal-kanban/shared';
-import { AgentOrchestrator } from './agent-orchestrator.service';
 import { AgentApplicationService } from './agent-application.service';
+import { AgentOrchestrator } from './agent-orchestrator.service';
 import { HintService } from './hint.service';
 import { ToMarkdownAgent } from './to-markdown.agent';
-import type { AgentProgressCallback, AgentProcessingResult } from './types';
+import { AgentProcessingResult, AgentProgressCallback } from './types';
 
 /**
  * Task Processor Service

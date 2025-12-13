@@ -1,5 +1,12 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { IColumnRepository, ITaskRepository, Column, ColumnId, TaskId, BoardId } from '@personal-kanban/shared';
+import { Inject, Injectable } from "@nestjs/common";
+import {
+  BoardId,
+  Column,
+  ColumnId,
+  type IColumnRepository,
+  type ITaskRepository,
+  TaskId,
+} from "@personal-kanban/shared";
 
 export interface WipStatus {
   columnId: string;
@@ -13,14 +20,18 @@ export interface WipStatus {
 @Injectable()
 export class WipService {
   constructor(
-    @Inject('IColumnRepository') private readonly columnRepository: IColumnRepository,
-    @Inject('ITaskRepository') private readonly taskRepository: ITaskRepository,
+    @Inject("IColumnRepository")
+    private readonly columnRepository: IColumnRepository,
+    @Inject("ITaskRepository") private readonly taskRepository: ITaskRepository,
   ) {}
 
   /**
    * Check if adding a task to a column would violate WIP limits
    */
-  async checkWipLimit(columnId: string, excludeTaskId?: string): Promise<WipStatus> {
+  async checkWipLimit(
+    columnId: string,
+    excludeTaskId?: string,
+  ): Promise<WipStatus> {
     const columnIdVO = ColumnId.from(columnId);
     const columnData = await this.columnRepository.findById(columnIdVO);
 
@@ -31,8 +42,13 @@ export class WipService {
     // Convert to Column entity
     const column = Column.fromPersistence(columnData);
 
-    const excludeTaskIdVO = excludeTaskId ? TaskId.from(excludeTaskId) : undefined;
-    const currentCount = await this.taskRepository.countByColumnId(columnIdVO, excludeTaskIdVO);
+    const excludeTaskIdVO = excludeTaskId
+      ? TaskId.from(excludeTaskId)
+      : undefined;
+    const currentCount = await this.taskRepository.countByColumnId(
+      columnIdVO,
+      excludeTaskIdVO,
+    );
     const wipLimit = column.wipLimit;
 
     // Use entity's WIP validation method
@@ -53,7 +69,8 @@ export class WipService {
    */
   async getBoardWipStatus(boardId: string): Promise<WipStatus[]> {
     const boardIdVO = BoardId.from(boardId);
-    const columnsData = await this.columnRepository.findByBoardIdOrdered(boardIdVO);
+    const columnsData =
+      await this.columnRepository.findByBoardIdOrdered(boardIdVO);
 
     // Get task counts for each column
     const statuses = await Promise.all(
@@ -61,7 +78,8 @@ export class WipService {
         // Convert to Column entity
         const column = Column.fromPersistence(columnData);
         const columnIdVO = ColumnId.from(column.id);
-        const currentCount = await this.taskRepository.countByColumnId(columnIdVO);
+        const currentCount =
+          await this.taskRepository.countByColumnId(columnIdVO);
         const wipLimit = column.wipLimit;
         const wouldExceed = column.isAtWipLimit(currentCount);
 

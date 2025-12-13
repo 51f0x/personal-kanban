@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TaskContext } from '@prisma/client';
-import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '@personal-kanban/shared';
+import { TaskContext } from '@prisma/client';
 import { taskAnalysisResponseSchema } from '../../shared/schemas/agent-schemas';
-import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
-import type { ActionItem } from './action-extractor.agent';
+import { validateDescription, validateTitle } from '../../shared/utils/input-validator.util';
+import { ActionItem } from './action-extractor.agent';
+import { BaseAgent } from './base-agent';
 
 export interface TaskAnalysisResult {
     agentId: string;
@@ -184,7 +184,7 @@ export class TaskAnalyzerAgent extends BaseAgent {
 
         let actionsText = '';
         if (suggestedActions && suggestedActions.length > 0) {
-            actionsText = `\n\n[Suggested Actions to Guide Analysis]\n`;
+            actionsText = '\n\n[Suggested Actions to Guide Analysis]\n';
             actionsText += suggestedActions
                 .map(
                     (action, idx) =>

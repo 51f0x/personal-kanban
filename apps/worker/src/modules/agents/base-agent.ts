@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import type { ConfigService } from '@nestjs/config';
+import { type RetryOptions, retryWithBackoff, withTimeout } from '@personal-kanban/shared';
 import { Ollama } from 'ollama';
-import { withTimeout, retryWithBackoff, type RetryOptions } from '@personal-kanban/shared';
 import { INPUT_LIMITS } from '../../shared/utils/input-validator.util';
 
 /**

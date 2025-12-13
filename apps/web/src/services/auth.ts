@@ -1,4 +1,4 @@
-import { apiPost, apiGet } from './api';
+import { apiGet, apiPost } from './api';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 const AUTH_USER_KEY = 'auth_user';

@@ -1,11 +1,11 @@
 import { AggregateRoot } from '../base/aggregate-root';
-import { TaskId } from '../value-objects/task-id.vo';
+import { TaskCreatedEvent, TaskMovedEvent, TaskStaleEvent, TaskUpdatedEvent } from '../events';
 import { BoardId } from '../value-objects/board-id.vo';
 import { ColumnId } from '../value-objects/column-id.vo';
-import { Title } from '../value-objects/title.vo';
 import { Description } from '../value-objects/description.vo';
 import { Position } from '../value-objects/position.vo';
-import { TaskCreatedEvent, TaskMovedEvent, TaskUpdatedEvent, TaskStaleEvent } from '../events';
+import { TaskId } from '../value-objects/task-id.vo';
+import { Title } from '../value-objects/title.vo';
 
 /**
  * Task Entity
@@ -187,7 +187,7 @@ export class Task extends AggregateRoot {
         newColumnId: ColumnId,
         newPosition: number,
         columnType: string,
-        wipOverride: boolean = false,
+        wipOverride = false,
     ): void {
         const oldColumnId = this._columnId;
         const oldPosition = this._position.value;

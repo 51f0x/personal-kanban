@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
 
 export interface CFDDataPoint {
   timestamp: Date;
@@ -28,7 +28,7 @@ export class AnalyticsService {
    * Get Cumulative Flow Diagram data for a board
    * Returns daily snapshots of task counts per column
    */
-  async getCFDData(boardId: string, days: number = 30): Promise<CFDDataPoint[]> {
+  async getCFDData(boardId: string, days = 30): Promise<CFDDataPoint[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
@@ -36,7 +36,7 @@ export class AnalyticsService {
     // Get columns for the board
     const columns = await this.prisma.column.findMany({
       where: { boardId },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
       select: { id: true, name: true },
     });
 
@@ -46,7 +46,7 @@ export class AnalyticsService {
         boardId,
         createdAt: { gte: startDate },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
       select: {
         taskId: true,
         type: true,
@@ -71,9 +71,13 @@ export class AnalyticsService {
     // Build daily snapshots
     const dataPoints: CFDDataPoint[] = [];
     const endDate = new Date();
-    
+
     // Generate a data point for each day
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
       const dayStart = new Date(d);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(d);
@@ -98,7 +102,11 @@ export class AnalyticsService {
   /**
    * Get throughput data (tasks completed per period)
    */
-  async getThroughput(boardId: string, periodType: 'day' | 'week' = 'week', periods: number = 12): Promise<ThroughputData[]> {
+  async getThroughput(
+    boardId: string,
+    periodType: "day" | "week" = "week",
+    periods = 12,
+  ): Promise<ThroughputData[]> {
     const data: ThroughputData[] = [];
     const now = new Date();
 
@@ -106,7 +114,7 @@ export class AnalyticsService {
       const periodStart = new Date(now);
       const periodEnd = new Date(now);
 
-      if (periodType === 'day') {
+      if (periodType === "day") {
         periodStart.setDate(now.getDate() - i);
         periodStart.setHours(0, 0, 0, 0);
         periodEnd.setDate(now.getDate() - i);
@@ -140,9 +148,10 @@ export class AnalyticsService {
         }),
       ]);
 
-      const periodLabel = periodType === 'day'
-        ? periodStart.toISOString().split('T')[0]
-        : `W${Math.ceil((now.getDate() - i * 7) / 7)}`;
+      const periodLabel =
+        periodType === "day"
+          ? periodStart.toISOString().split("T")[0]
+          : `W${Math.ceil((now.getDate() - i * 7) / 7)}`;
 
       data.push({
         period: periodLabel,
@@ -159,14 +168,17 @@ export class AnalyticsService {
    * Lead time: created → completed
    * Cycle time: first work column → completed
    */
-  async getLeadCycleMetrics(boardId: string, limit: number = 50): Promise<LeadCycleMetric[]> {
+  async getLeadCycleMetrics(
+    boardId: string,
+    limit = 50,
+  ): Promise<LeadCycleMetric[]> {
     const completedTasks = await this.prisma.task.findMany({
       where: {
         boardId,
         isDone: true,
         completedAt: { not: null },
       },
-      orderBy: { completedAt: 'desc' },
+      orderBy: { completedAt: "desc" },
       take: limit,
       select: {
         id: true,
@@ -178,7 +190,8 @@ export class AnalyticsService {
 
     return completedTasks.map((task) => {
       const leadTimeMs = task.completedAt!.getTime() - task.createdAt.getTime();
-      const leadTimeDays = Math.round(leadTimeMs / (1000 * 60 * 60 * 24) * 10) / 10;
+      const leadTimeDays =
+        Math.round((leadTimeMs / (1000 * 60 * 60 * 24)) * 10) / 10;
 
       // For cycle time, we'd need to track when task first entered a work column
       // For now, use lead time as an approximation
@@ -195,7 +208,7 @@ export class AnalyticsService {
   /**
    * Get stale tasks (not moved in X days)
    */
-  async getStaleTasks(boardId: string, thresholdDays: number = 7) {
+  async getStaleTasks(boardId: string, thresholdDays = 7) {
     const threshold = new Date();
     threshold.setDate(threshold.getDate() - thresholdDays);
 
@@ -205,14 +218,14 @@ export class AnalyticsService {
         isDone: false,
         lastMovedAt: { lt: threshold },
         column: {
-          type: { notIn: ['DONE', 'ARCHIVE', 'SOMEDAY'] },
+          type: { notIn: ["DONE", "ARCHIVE", "SOMEDAY"] },
         },
       },
       include: {
         column: { select: { id: true, name: true, type: true } },
         project: { select: { id: true, name: true } },
       },
-      orderBy: { lastMovedAt: 'asc' },
+      orderBy: { lastMovedAt: "asc" },
     });
   }
 
@@ -233,7 +246,9 @@ export class AnalyticsService {
 
     // Current breaches
     const currentBreaches = columns
-      .filter((col) => col._count.tasks > (col.wipLimit ?? Infinity))
+      .filter(
+        (col) => col._count.tasks > (col.wipLimit ?? Number.POSITIVE_INFINITY),
+      )
       .map((col) => ({
         columnId: col.id,
         columnName: col.name,
@@ -253,20 +268,26 @@ export class AnalyticsService {
    * Get board summary stats
    */
   async getBoardSummary(boardId: string) {
-    const [totalTasks, completedTasks, inProgressTasks, inputTasks, staleTasks] = await Promise.all([
+    const [
+      totalTasks,
+      completedTasks,
+      inProgressTasks,
+      inputTasks,
+      staleTasks,
+    ] = await Promise.all([
       this.prisma.task.count({ where: { boardId } }),
       this.prisma.task.count({ where: { boardId, isDone: true } }),
       this.prisma.task.count({
         where: {
           boardId,
           isDone: false,
-          column: { type: 'CONTEXT' },
+          column: { type: "CONTEXT" },
         },
       }),
       this.prisma.task.count({
         where: {
           boardId,
-          column: { type: 'INPUT' },
+          column: { type: "INPUT" },
         },
       }),
       this.prisma.task.count({
@@ -278,7 +299,8 @@ export class AnalyticsService {
       }),
     ]);
 
-    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const completionRate =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     return {
       boardId,

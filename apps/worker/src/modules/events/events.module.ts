@@ -1,7 +1,7 @@
-import { Module, Global } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RedisEventBus } from './redis-event-bus.service';
 import { IEventBus } from '@personal-kanban/shared';
+import { RedisEventBus } from './redis-event-bus.service';
 
 @Global()
 @Module({

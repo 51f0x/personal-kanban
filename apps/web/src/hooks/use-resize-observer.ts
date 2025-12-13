@@ -1,12 +1,12 @@
-import { useEffect } from "react";
-import type { RefObject } from "@react-types/shared";
+import type { RefObject } from '@react-types/shared';
+import { useEffect } from 'react';
 
 /**
  * Checks if the ResizeObserver API is supported.
  * @returns True if the ResizeObserver API is supported, false otherwise.
  */
 function hasResizeObserver() {
-    return typeof window.ResizeObserver !== "undefined";
+    return typeof window.ResizeObserver !== 'undefined';
 }
 
 /**
@@ -41,10 +41,10 @@ export function useResizeObserver<T extends Element>(options: useResizeObserverO
         }
 
         if (!hasResizeObserver()) {
-            window.addEventListener("resize", onResize, false);
+            window.addEventListener('resize', onResize, false);
 
             return () => {
-                window.removeEventListener("resize", onResize, false);
+                window.removeEventListener('resize', onResize, false);
             };
         } else {
             const resizeObserverInstance = new window.ResizeObserver((entries) => {

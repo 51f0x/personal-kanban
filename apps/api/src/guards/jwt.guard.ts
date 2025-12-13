@@ -1,22 +1,23 @@
 import {
-  Injectable,
   ExecutionContext,
+  Injectable,
   UnauthorizedException,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AuthGuard } from "@nestjs/passport";
+
+import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 
 /**
  * Guard for JWT-based authentication using bearer tokens
  * Uses passport-jwt strategy
  * Allows public endpoints marked with @Public()
- * 
+ *
  * This guard validates JWT bearer tokens from the Authorization header:
  * Authorization: Bearer <token>
  */
 @Injectable()
-export class JwtGuard extends AuthGuard('jwt') {
+export class JwtGuard extends AuthGuard("jwt") {
   constructor(private reflector: Reflector) {
     super();
   }
@@ -26,11 +27,11 @@ export class JwtGuard extends AuthGuard('jwt') {
       context.getHandler(),
       context.getClass(),
     ]);
-    
+
     if (isPublic) {
       return true;
     }
-    
+
     return super.canActivate(context);
   }
 
@@ -42,45 +43,47 @@ export class JwtGuard extends AuthGuard('jwt') {
 
       if (!authHeader) {
         throw new UnauthorizedException({
-          message: 'Missing authorization header',
-          code: 'AUTH_HEADER_MISSING',
-          hint: 'Include Authorization: Bearer <token> header in your request',
+          message: "Missing authorization header",
+          code: "AUTH_HEADER_MISSING",
+          hint: "Include Authorization: Bearer <token> header in your request",
         });
       }
 
-      if (!authHeader.startsWith('Bearer ')) {
+      if (!authHeader.startsWith("Bearer ")) {
         throw new UnauthorizedException({
-          message: 'Invalid authorization header format',
-          code: 'AUTH_HEADER_INVALID',
-          hint: 'Authorization header must be in format: Bearer <token>',
+          message: "Invalid authorization header format",
+          code: "AUTH_HEADER_INVALID",
+          hint: "Authorization header must be in format: Bearer <token>",
         });
       }
 
       // Handle specific JWT errors
       if (info) {
-        if (info.name === 'TokenExpiredError') {
+        if (info.name === "TokenExpiredError") {
           throw new UnauthorizedException({
-            message: 'Token has expired',
-            code: 'TOKEN_EXPIRED',
-            hint: 'Please refresh your token or log in again',
+            message: "Token has expired",
+            code: "TOKEN_EXPIRED",
+            hint: "Please refresh your token or log in again",
           });
         }
-        if (info.name === 'JsonWebTokenError') {
+        if (info.name === "JsonWebTokenError") {
           throw new UnauthorizedException({
-            message: 'Invalid token',
-            code: 'TOKEN_INVALID',
-            hint: 'Please check your token and try again',
+            message: "Invalid token",
+            code: "TOKEN_INVALID",
+            hint: "Please check your token and try again",
           });
         }
       }
 
-      throw err || new UnauthorizedException({
-        message: 'Authentication failed',
-        code: 'AUTH_FAILED',
-      });
+      throw (
+        err ||
+        new UnauthorizedException({
+          message: "Authentication failed",
+          code: "AUTH_FAILED",
+        })
+      );
     }
 
     return user;
   }
 }
-

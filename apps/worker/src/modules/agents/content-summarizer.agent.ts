@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '@personal-kanban/shared';
 import { summarizationResponseSchema } from '../../shared/schemas/agent-schemas';
-import { validateContentSize, INPUT_LIMITS } from '../../shared/utils/input-validator.util';
+import { INPUT_LIMITS, validateContentSize } from '../../shared/utils/input-validator.util';
+import { BaseAgent } from './base-agent';
 
 export interface SummarizationResult {
     agentId: string;

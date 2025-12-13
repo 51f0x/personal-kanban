@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 // Background image from Figma
@@ -71,7 +71,9 @@ export default function SignUpView() {
             // For now, redirect to settings where user can see their boards
             navigate('/settings', { replace: true });
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Sign up failed. Please try again.');
+            toast.error(
+                error instanceof Error ? error.message : 'Sign up failed. Please try again.',
+            );
         } finally {
             setIsLoading(false);
         }
@@ -121,7 +123,10 @@ export default function SignUpView() {
                     <form onSubmit={handleSubmit} className="flex w-full flex-col gap-6">
                         {/* Username Input */}
                         <div className="flex w-full flex-col gap-2">
-                            <Label htmlFor="username" className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800">
+                            <Label
+                                htmlFor="username"
+                                className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800"
+                            >
                                 Username
                             </Label>
                             <div className="relative">
@@ -141,7 +146,10 @@ export default function SignUpView() {
 
                         {/* Email Input */}
                         <div className="flex w-full flex-col gap-2">
-                            <Label htmlFor="email" className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800">
+                            <Label
+                                htmlFor="email"
+                                className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800"
+                            >
                                 Email Address
                             </Label>
                             <div className="relative">
@@ -161,7 +169,10 @@ export default function SignUpView() {
 
                         {/* Password Input */}
                         <div className="flex w-full flex-col gap-2">
-                            <Label htmlFor="password" className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800">
+                            <Label
+                                htmlFor="password"
+                                className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800"
+                            >
                                 Password
                             </Label>
                             <div className="relative">
@@ -196,10 +207,11 @@ export default function SignUpView() {
                                         {[0, 1, 2, 3].map((index) => (
                                             <div
                                                 key={index}
-                                                className={`h-1 flex-1 rounded-[1234px] ${index < passwordStrength.strength
-                                                    ? 'bg-green-500'
-                                                    : 'bg-slate-300'
-                                                    }`}
+                                                className={`h-1 flex-1 rounded-[1234px] ${
+                                                    index < passwordStrength.strength
+                                                        ? 'bg-green-500'
+                                                        : 'bg-slate-300'
+                                                }`}
                                             />
                                         ))}
                                     </div>
@@ -241,7 +253,12 @@ export default function SignUpView() {
                         className="h-12 w-full rounded-[1234px] border-slate-300 bg-white px-4 py-2.5 hover:bg-slate-50"
                     >
                         <div className="h-6 w-6">
-                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-full w-full"
+                            >
                                 <title>Google logo</title>
                                 <path
                                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -270,4 +287,3 @@ export default function SignUpView() {
         </div>
     );
 }
-

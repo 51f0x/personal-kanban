@@ -1,6 +1,6 @@
+import { resolve } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
-import { resolve } from 'node:path';
 import { workerConfigSchema } from '@personal-kanban/shared';
 
 // Resolve root .env paths (works from apps/worker directory)

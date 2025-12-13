@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Task } from '../services/types';
+import { useCallback, useEffect, useState } from 'react';
 import {
+    deleteTask as deleteTaskApi,
     fetchTasks,
     moveTask as moveTaskApi,
-    deleteTask as deleteTaskApi,
 } from '../services/tasks';
+import type { Task } from '../services/types';
 
 export function useTasks(boardId: string | null) {
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -35,12 +35,7 @@ export function useTasks(boardId: string | null) {
     }, [loadTasks]);
 
     const moveTask = useCallback(
-        async (
-            taskId: string,
-            targetColumnId: string,
-            force: boolean = false,
-            position?: number,
-        ) => {
+        async (taskId: string, targetColumnId: string, force = false, position?: number) => {
             try {
                 // Optimistic update
                 setTasks((prev) =>

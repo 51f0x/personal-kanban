@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateTagDto } from './dto/create-tag.input';
-import { UpdateTagDto } from './dto/update-tag.input';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import type { CreateTagDto } from "./dto/create-tag.input";
+import type { UpdateTagDto } from "./dto/update-tag.input";
 
 @Injectable()
 export class TagService {
@@ -19,14 +24,16 @@ export class TagService {
     });
 
     if (existing) {
-      throw new ConflictException(`Tag "${input.name}" already exists on this board`);
+      throw new ConflictException(
+        `Tag "${input.name}" already exists on this board`,
+      );
     }
 
     return this.prisma.tag.create({
       data: {
         boardId: input.boardId,
         name: input.name,
-        color: input.color ?? '#94a3b8',
+        color: input.color ?? "#94a3b8",
       },
     });
   }
@@ -49,7 +56,7 @@ export class TagService {
   async listTagsForBoard(boardId: string) {
     return this.prisma.tag.findMany({
       where: { boardId },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
       include: {
         _count: { select: { tasks: true } },
       },
@@ -74,7 +81,9 @@ export class TagService {
       });
 
       if (existing) {
-        throw new ConflictException(`Tag "${input.name}" already exists on this board`);
+        throw new ConflictException(
+          `Tag "${input.name}" already exists on this board`,
+        );
       }
     }
 
@@ -109,8 +118,14 @@ export class TagService {
   async addTagToTask(taskId: string, tagId: string) {
     // Verify both task and tag exist and belong to the same board
     const [task, tag] = await Promise.all([
-      this.prisma.task.findUnique({ where: { id: taskId }, select: { boardId: true } }),
-      this.prisma.tag.findUnique({ where: { id: tagId }, select: { boardId: true } }),
+      this.prisma.task.findUnique({
+        where: { id: taskId },
+        select: { boardId: true },
+      }),
+      this.prisma.tag.findUnique({
+        where: { id: tagId },
+        select: { boardId: true },
+      }),
     ]);
 
     if (!task) {
@@ -120,7 +135,7 @@ export class TagService {
       throw new NotFoundException(`Tag not found: ${tagId}`);
     }
     if (task.boardId !== tag.boardId) {
-      throw new ConflictException('Task and tag must belong to the same board');
+      throw new ConflictException("Task and tag must belong to the same board");
     }
 
     // Create the relationship (upsert to handle duplicates)

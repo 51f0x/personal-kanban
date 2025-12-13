@@ -1,8 +1,8 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 
 // Images from Figma
 const imgBg = 'http://localhost:3845/assets/201faa1ef50a78dda4233dc317a385f1f17ffd6c.png';
@@ -37,10 +37,7 @@ function Logo() {
                     className="h-full w-full"
                 >
                     <title>Logo text</title>
-                    <path
-                        d="M0 0H69V17H0V0Z"
-                        fill="#1E293B"
-                    />
+                    <path d="M0 0H69V17H0V0Z" fill="#1E293B" />
                 </svg>
             </div>
         </div>
@@ -57,19 +54,34 @@ function HeaderNavigation() {
                 <div className="flex items-center gap-12">
                     <Logo />
                     <nav className="hidden items-center gap-8 md:flex">
-                        <Link to="/" className="text-sm font-bold text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/"
+                            className="text-sm font-bold text-slate-600 hover:text-slate-800"
+                        >
                             Home
                         </Link>
-                        <Link to="/login" className="text-sm font-bold text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/login"
+                            className="text-sm font-bold text-slate-600 hover:text-slate-800"
+                        >
                             Board
                         </Link>
-                        <Link to="/login" className="text-sm font-bold text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/login"
+                            className="text-sm font-bold text-slate-600 hover:text-slate-800"
+                        >
                             Capture
                         </Link>
-                        <Link to="/login" className="text-sm font-bold text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/login"
+                            className="text-sm font-bold text-slate-600 hover:text-slate-800"
+                        >
                             Analytics
                         </Link>
-                        <Link to="/login" className="text-sm font-bold text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/login"
+                            className="text-sm font-bold text-slate-600 hover:text-slate-800"
+                        >
                             Settings
                         </Link>
                     </nav>
@@ -78,7 +90,10 @@ function HeaderNavigation() {
                     <Button variant="outline" className="hidden md:flex" asChild>
                         <Link to="/login">Login</Link>
                     </Button>
-                    <Button className="hidden bg-indigo-600 text-white md:flex hover:bg-indigo-700" asChild>
+                    <Button
+                        className="hidden bg-indigo-600 text-white md:flex hover:bg-indigo-700"
+                        asChild
+                    >
                         <Link to="/signup">Get Started</Link>
                     </Button>
                     <Button
@@ -123,7 +138,9 @@ function HeroSection() {
                                     Your Personal Kanban Board with GTD Principles.
                                 </h1>
                                 <p className="font-['Plus_Jakarta_Sans',sans-serif] text-[20px] font-normal leading-[1.6] text-slate-600">
-                                    A fully self-hosted productivity system that unifies capture, clarification, automation, recurring tasks, and analytics. Own your data, control your workflow.
+                                    A fully self-hosted productivity system that unifies capture,
+                                    clarification, automation, recurring tasks, and analytics. Own
+                                    your data, control your workflow.
                                 </p>
                             </div>
 
@@ -207,32 +224,38 @@ function FeaturesSection() {
         {
             icon: '📋',
             title: 'Configurable Kanban Board',
-            description: 'Drag-and-drop task management with GTD-aligned columns, WIP limits, context filters, and project organization. Customize your workflow to match how you work.',
+            description:
+                'Drag-and-drop task management with GTD-aligned columns, WIP limits, context filters, and project organization. Customize your workflow to match how you work.',
         },
         {
             icon: '📥',
             title: 'Rich Capture Mechanisms',
-            description: 'Capture tasks from anywhere: web interface, PWA, browser extension, mobile widget, or email via IMAP. Offline support ensures nothing gets lost.',
+            description:
+                'Capture tasks from anywhere: web interface, PWA, browser extension, mobile widget, or email via IMAP. Offline support ensures nothing gets lost.',
         },
         {
             icon: '🎯',
             title: 'GTD Clarification Wizard',
-            description: 'Guided workflow to process your inbox efficiently. Two-minute rule, next action definition, context assignment, and project linking—all with keyboard shortcuts.',
+            description:
+                'Guided workflow to process your inbox efficiently. Two-minute rule, next action definition, context assignment, and project linking—all with keyboard shortcuts.',
         },
         {
             icon: '⚙️',
             title: 'Automation & Rules Engine',
-            description: 'Powerful automation with triggers, conditions, and actions. Automatically organize tasks, apply tags, move columns, send notifications, and more—all self-hosted.',
+            description:
+                'Powerful automation with triggers, conditions, and actions. Automatically organize tasks, apply tags, move columns, send notifications, and more—all self-hosted.',
         },
         {
             icon: '🔄',
             title: 'Recurring Templates',
-            description: 'Schedule recurring tasks with RRULE support. Weekly reviews, daily standups, or any pattern you need. Timezone-aware with DST handling.',
+            description:
+                'Schedule recurring tasks with RRULE support. Weekly reviews, daily standups, or any pattern you need. Timezone-aware with DST handling.',
         },
         {
             icon: '📊',
             title: 'Analytics & Review',
-            description: 'LeanKit-style analytics: Cumulative Flow Diagrams, lead time, cycle time, throughput metrics, and stale task detection. Make data-driven improvements.',
+            description:
+                'LeanKit-style analytics: Cumulative Flow Diagrams, lead time, cycle time, throughput metrics, and stale task detection. Make data-driven improvements.',
         },
     ];
 
@@ -240,20 +263,23 @@ function FeaturesSection() {
         <section className="bg-white py-24">
             <div className="mx-auto max-w-[1216px] px-4 md:px-28">
                 <div className="mb-16 flex flex-col items-center gap-5 text-center">
-                    <Badge className="w-fit bg-indigo-50 text-indigo-600">
-                        Core Features
-                    </Badge>
+                    <Badge className="w-fit bg-indigo-50 text-indigo-600">Core Features</Badge>
                     <h2 className="font-['Plus_Jakarta_Sans',sans-serif] text-[36px] font-extrabold leading-[44px] tracking-[-0.504px] text-slate-800">
                         Everything you need for GTD productivity.
                     </h2>
                     <p className="max-w-[800px] text-[20px] font-normal leading-[1.6] text-slate-600">
-                        A complete productivity system that combines Kanban visualization with Getting Things Done methodology. Capture, clarify, organize, and review—all in one self-hosted platform.
+                        A complete productivity system that combines Kanban visualization with
+                        Getting Things Done methodology. Capture, clarify, organize, and review—all
+                        in one self-hosted platform.
                     </p>
                 </div>
 
                 <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
                     {features.map((feature) => (
-                        <div key={feature.title} className="flex flex-col items-center gap-5 text-center">
+                        <div
+                            key={feature.title}
+                            className="flex flex-col items-center gap-5 text-center"
+                        >
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-2xl">
                                 {feature.icon}
                             </div>
@@ -280,13 +306,17 @@ function TestimonialsSection() {
                             <span className="text-2xl">💬</span>
                         </div>
                         <p className="mb-6 text-[36px] font-medium leading-[44px] tracking-[-0.504px] text-slate-800">
-                            Finally, a productivity system that respects my data privacy while giving me the GTD workflow I need. The automation rules save me hours every week.
+                            Finally, a productivity system that respects my data privacy while
+                            giving me the GTD workflow I need. The automation rules save me hours
+                            every week.
                         </p>
                         <div className="flex flex-col gap-1">
                             <p className="text-lg font-extrabold text-slate-800">
                                 — Knowledge Worker
                             </p>
-                            <p className="text-base font-medium text-slate-600">Productivity Enthusiast</p>
+                            <p className="text-base font-medium text-slate-600">
+                                Productivity Enthusiast
+                            </p>
                         </div>
                     </div>
                     <div className="flex-1">
@@ -321,13 +351,18 @@ function StatisticsSection() {
                         Built for performance and reliability.
                     </h2>
                     <p className="text-[20px] font-normal leading-[1.6] text-slate-600">
-                        Track your productivity with comprehensive analytics. Monitor lead time, cycle time, throughput, and identify bottlenecks in your workflow. All data stays on your infrastructure.
+                        Track your productivity with comprehensive analytics. Monitor lead time,
+                        cycle time, throughput, and identify bottlenecks in your workflow. All data
+                        stays on your infrastructure.
                     </p>
                 </div>
 
                 <div className="flex flex-col gap-8 border-t border-slate-300 pt-8 md:flex-row md:justify-between">
                     {stats.map((stat) => (
-                        <div key={stat.label} className="flex flex-col items-center gap-4 text-center">
+                        <div
+                            key={stat.label}
+                            className="flex flex-col items-center gap-4 text-center"
+                        >
                             <p className="text-[60px] font-extrabold leading-[68px] tracking-[-1.08px] text-indigo-600">
                                 {stat.value}
                             </p>
@@ -351,7 +386,8 @@ function CtaSection() {
                     Ready to take control of your productivity?
                 </h2>
                 <p className="mb-8 text-[20px] font-normal leading-[1.6] text-slate-600">
-                    Deploy your own instance and start organizing your work with GTD principles. Self-hosted, privacy-focused, and fully customizable to your workflow.
+                    Deploy your own instance and start organizing your work with GTD principles.
+                    Self-hosted, privacy-focused, and fully customizable to your workflow.
                 </p>
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
                     <Button variant="outline" className="border-indigo-600 text-indigo-600" asChild>
@@ -374,13 +410,22 @@ function Footer() {
                 <div className="mb-8 flex flex-col items-center gap-10">
                     <Logo />
                     <nav className="flex flex-wrap items-center justify-center gap-6">
-                        <Link to="/" className="text-base font-medium text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/"
+                            className="text-base font-medium text-slate-600 hover:text-slate-800"
+                        >
                             Home
                         </Link>
-                        <Link to="/login" className="text-base font-medium text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/login"
+                            className="text-base font-medium text-slate-600 hover:text-slate-800"
+                        >
                             Login
                         </Link>
-                        <Link to="/signup" className="text-base font-medium text-slate-600 hover:text-slate-800">
+                        <Link
+                            to="/signup"
+                            className="text-base font-medium text-slate-600 hover:text-slate-800"
+                        >
                             Sign Up
                         </Link>
                     </nav>

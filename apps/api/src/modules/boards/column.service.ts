@@ -1,27 +1,38 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
-import { ColumnType } from '@prisma/client';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateColumnDto } from './dto/create-column.input';
-import { UpdateColumnDto, ReorderColumnsDto } from './dto/update-column.input';
-import { IColumnRepository, Column, ColumnId, BoardId } from '@personal-kanban/shared';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  BoardId,
+  Column,
+  ColumnId,
+  type IColumnRepository,
+  PrismaService,
+} from "@personal-kanban/shared";
+import { ColumnType } from "@prisma/client";
+
+import { CreateColumnDto } from "./dto/create-column.input";
+import { ReorderColumnsDto, UpdateColumnDto } from "./dto/update-column.input";
 
 @Injectable()
 export class ColumnService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('IColumnRepository') private readonly columnRepository: IColumnRepository,
+    @Inject("IColumnRepository")
+    private readonly columnRepository: IColumnRepository,
   ) {}
 
   async createColumn(input: CreateColumnDto) {
     const boardId = BoardId.from(input.boardId);
-    
+
     // Get the max position for the board if not specified
     let position = input.position;
     if (position === undefined) {
       const columns = await this.columnRepository.findByBoardId(boardId);
-      const maxPosition = columns.length > 0 
-        ? Math.max(...columns.map(c => c.position))
-        : -1;
+      const maxPosition =
+        columns.length > 0 ? Math.max(...columns.map((c) => c.position)) : -1;
       position = maxPosition + 1;
     }
 
@@ -59,7 +70,7 @@ export class ColumnService {
     // TODO: In Phase 3, use ITaskRepository.findByColumnId with relations
     const tasks = await this.prisma.task.findMany({
       where: { columnId: id },
-      orderBy: { lastMovedAt: 'asc' },
+      orderBy: { lastMovedAt: "asc" },
       include: {
         tags: { include: { tag: true } },
         project: true,
@@ -100,7 +111,7 @@ export class ColumnService {
   async updateColumn(id: string, input: UpdateColumnDto) {
     const columnId = ColumnId.from(id);
     const columnData = await this.columnRepository.findById(columnId);
-    
+
     if (!columnData) {
       throw new NotFoundException(`Column not found: ${id}`);
     }
@@ -150,9 +161,13 @@ export class ColumnService {
     if (column.type === ColumnType.INPUT) {
       const boardId = BoardId.from(column.boardId);
       const allColumns = await this.columnRepository.findByBoardId(boardId);
-      const inputColumnCount = allColumns.filter(c => c.type === ColumnType.INPUT).length;
+      const inputColumnCount = allColumns.filter(
+        (c) => c.type === ColumnType.INPUT,
+      ).length;
       if (inputColumnCount <= 1) {
-        throw new BadRequestException('Cannot delete the only Input column on the board.');
+        throw new BadRequestException(
+          "Cannot delete the only Input column on the board.",
+        );
       }
     }
 
@@ -177,7 +192,9 @@ export class ColumnService {
     const existingIds = new Set(columns.map((c) => c.id));
     for (const id of input.columnIds) {
       if (!existingIds.has(id)) {
-        throw new BadRequestException(`Column ${id} does not belong to board ${boardId}`);
+        throw new BadRequestException(
+          `Column ${id} does not belong to board ${boardId}`,
+        );
       }
     }
 

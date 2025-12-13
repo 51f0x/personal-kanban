@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateProjectInput } from './dto/create-project.input';
-import { UpdateProjectInput } from './dto/update-project.input';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import type { CreateProjectInput } from "./dto/create-project.input";
+import type { UpdateProjectInput } from "./dto/update-project.input";
 
 @Injectable()
 export class ProjectService {
@@ -22,7 +23,7 @@ export class ProjectService {
   listProjects(boardId: string) {
     return this.prisma.project.findMany({
       where: { boardId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
       include: { tasks: true },
     });
   }

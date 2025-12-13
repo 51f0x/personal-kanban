@@ -1,28 +1,32 @@
+import { Request as ExpressRequest } from "express";
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
-  Post,
-  Request,
   HttpCode,
   HttpStatus,
-  UnauthorizedException,
-  BadRequestException,
   Logger,
-} from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
-import type { Request as ExpressRequest } from 'express';
-import type { UserService } from './user.service';
-import type { PasswordService } from './password.service';
-import type { JwtService } from './jwt.service';
-import { LoginDto } from './dto/login.dto';
-import { SetPasswordDto } from './dto/set-password.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { Public } from '../../decorators/public.decorator';
-import { UserService as UserServiceInstance } from './user.service';
-import { PasswordService as PasswordServiceInstance } from './password.service';
-import { JwtService as JwtServiceInstance } from './jwt.service';
+  Post,
+  Request,
+  UnauthorizedException,
+} from "@nestjs/common";
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
+
+import { JwtService as JwtServiceInstance } from "./jwt.service";
+import { PasswordService as PasswordServiceInstance } from "./password.service";
+import { UserService as UserServiceInstance } from "./user.service";
+import { Public } from "../../decorators/public.decorator";
+import { LoginDto } from "./dto/login.dto";
+import { RefreshTokenDto } from "./dto/refresh-token.dto";
+import { SetPasswordDto } from "./dto/set-password.dto";
 
 interface AuthenticatedUser {
   id: string;
@@ -40,8 +44,8 @@ type AuthenticatedRequest = ExpressRequest & {
   };
 };
 
-@ApiTags('auth')
-@Controller('auth')
+@ApiTags("auth")
+@Controller("auth")
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
   constructor(
@@ -55,24 +59,36 @@ export class AuthController {
    * POST /api/v1/auth/login
    * Validates email and password using LocalStrategy and creates session for web clients
    */
-  @Post('login')
+  @Post("login")
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 login attempts per minute
   @Public()
-  @ApiOperation({ summary: 'Login', description: 'Authenticate user and receive JWT tokens. Supports both session (web) and JWT (extensions/mobile).' })
+  @ApiOperation({
+    summary: "Login",
+    description:
+      "Authenticate user and receive JWT tokens. Supports both session (web) and JWT (extensions/mobile).",
+  })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Login successful, returns user info and JWT tokens' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Request() req: AuthenticatedRequest, @Body() loginDto: LoginDto) {
-
+  @ApiResponse({
+    status: 200,
+    description: "Login successful, returns user info and JWT tokens",
+  })
+  @ApiResponse({ status: 401, description: "Invalid credentials" })
+  async login(
+    @Request() req: AuthenticatedRequest,
+    @Body() loginDto: LoginDto,
+  ) {
     const user = await this.userService.findByEmail(loginDto.email);
     if (!user || !user.passwordHash) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
-    const isPasswordValid = await this.passwordService.verifyPassword(user.passwordHash, loginDto.password);
+    const isPasswordValid = await this.passwordService.verifyPassword(
+      user.passwordHash,
+      loginDto.password,
+    );
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     // Generate JWT tokens for API clients
@@ -94,11 +110,15 @@ export class AuthController {
    * GET /api/v1/auth/me
    * Supports both session and JWT
    */
-  @Get('me')
+  @Get("me")
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user', description: 'Returns the currently authenticated user information. Supports both session and JWT authentication.' })
-  @ApiResponse({ status: 200, description: 'Current user information' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiOperation({
+    summary: "Get current user",
+    description:
+      "Returns the currently authenticated user information. Supports both session and JWT authentication.",
+  })
+  @ApiResponse({ status: 200, description: "Current user information" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   async getMe(@Request() req: AuthenticatedRequest) {
     if (!req.user) {
       return null;
@@ -116,12 +136,15 @@ export class AuthController {
    * POST /api/v1/auth/logout
    * Requires authentication
    */
-  @Post('logout')
+  @Post("logout")
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Logout', description: 'Destroys the current user session' })
-  @ApiResponse({ status: 200, description: 'Logout successful' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiOperation({
+    summary: "Logout",
+    description: "Destroys the current user session",
+  })
+  @ApiResponse({ status: 200, description: "Logout successful" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   async logout(@Request() req: AuthenticatedRequest) {
     if (req.user && req.logout) {
       return new Promise<void>((resolve, reject) => {
@@ -141,7 +164,7 @@ export class AuthController {
         });
       });
     }
-    return { message: 'Logged out' };
+    return { message: "Logged out" };
   }
 
   /**
@@ -150,25 +173,32 @@ export class AuthController {
    * Requires authentication - validates refresh token from request body
    * Note: This endpoint requires a valid bearer token to access, then validates the refresh token from body
    */
-  @Post('refresh')
+  @Post("refresh")
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 refresh attempts per minute
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Refresh JWT token', description: 'Refresh access and refresh tokens using a valid refresh token' })
+  @ApiOperation({
+    summary: "Refresh JWT token",
+    description:
+      "Refresh access and refresh tokens using a valid refresh token",
+  })
   @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({ status: 200, description: 'New token pair generated' })
-  @ApiResponse({ status: 400, description: 'Invalid token type' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired token' })
-  async refresh(@Request() req: AuthenticatedRequest, @Body() refreshDto: RefreshTokenDto) {
+  @ApiResponse({ status: 200, description: "New token pair generated" })
+  @ApiResponse({ status: 400, description: "Invalid token type" })
+  @ApiResponse({ status: 401, description: "Invalid or expired token" })
+  async refresh(
+    @Request() req: AuthenticatedRequest,
+    @Body() refreshDto: RefreshTokenDto,
+  ) {
     const payload = await this.jwtService.verifyToken(refreshDto.refreshToken);
 
-    if (payload.type !== 'refresh') {
-      throw new BadRequestException('Invalid token type');
+    if (payload.type !== "refresh") {
+      throw new BadRequestException("Invalid token type");
     }
 
     const user = await this.userService.getUser(payload.sub);
     if (!user) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException("Invalid token");
     }
 
     const tokens = await this.jwtService.generateTokenPair(user.id, user.email);
@@ -181,25 +211,38 @@ export class AuthController {
    * POST /api/v1/auth/set-password
    * Requires authentication (session or JWT)
    */
-  @Post('set-password')
+  @Post("set-password")
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 password changes per minute
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Set password', description: 'Set or update password for the authenticated user' })
+  @ApiOperation({
+    summary: "Set password",
+    description: "Set or update password for the authenticated user",
+  })
   @ApiBody({ type: SetPasswordDto })
-  @ApiResponse({ status: 200, description: 'Password updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or user ID required' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async setPassword(@Request() req: AuthenticatedRequest, @Body() setPasswordDto: SetPasswordDto) {
+  @ApiResponse({ status: 200, description: "Password updated successfully" })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid request or user ID required",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  async setPassword(
+    @Request() req: AuthenticatedRequest,
+    @Body() setPasswordDto: SetPasswordDto,
+  ) {
     // Since auth is reverted, this endpoint requires userId to be provided in the request body
     // or we need to handle it differently
     if (!req.user) {
-      throw new BadRequestException('User ID is required when authentication is disabled');
+      throw new BadRequestException(
+        "User ID is required when authentication is disabled",
+      );
     }
 
     const userId = req.user.id;
-    const passwordHash = await this.passwordService.hashPassword(setPasswordDto.password);
+    const passwordHash = await this.passwordService.hashPassword(
+      setPasswordDto.password,
+    );
     await this.userService.updatePassword(userId, passwordHash);
 
-    return { message: 'Password updated successfully' };
+    return { message: "Password updated successfully" };
   }
 }

@@ -1,36 +1,50 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateTemplateDto } from './dto/create-template.input';
-import { UpdateTemplateDto } from './dto/update-template.input';
+import type { Prisma } from "@prisma/client";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import type { CreateTemplateDto } from "./dto/create-template.input";
+import type { UpdateTemplateDto } from "./dto/update-template.input";
 
 // Simple RRULE parsing for next occurrence calculation
 // In production, use the 'rrule' package for full RFC 5545 support
-function parseSimpleRRule(rrule: string, timezone: string = 'UTC'): Date | null {
+function parseSimpleRRule(rrule: string, timezone = "UTC"): Date | null {
   try {
     // Handle basic RRULE patterns
-    const parts = rrule.split(';').reduce((acc, part) => {
-      const [key, value] = part.split('=');
-      acc[key] = value;
-      return acc;
-    }, {} as Record<string, string>);
+    const parts = rrule.split(";").reduce(
+      (acc, part) => {
+        const [key, value] = part.split("=");
+        acc[key] = value;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
 
     const now = new Date();
     const nextDate = new Date(now);
 
     // Get frequency
-    const freq = parts['FREQ'];
-    
+    const freq = parts["FREQ"];
+
     switch (freq) {
-      case 'DAILY':
+      case "DAILY":
         nextDate.setDate(nextDate.getDate() + 1);
         break;
-      case 'WEEKLY':
+      case "WEEKLY": {
         // Handle BYDAY
-        const days = parts['BYDAY']?.split(',') ?? ['MO'];
-        const dayMap: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
-        const targetDays = days.map(d => dayMap[d]).filter(d => d !== undefined);
-        
+        const days = parts["BYDAY"]?.split(",") ?? ["MO"];
+        const dayMap: Record<string, number> = {
+          SU: 0,
+          MO: 1,
+          TU: 2,
+          WE: 3,
+          TH: 4,
+          FR: 5,
+          SA: 6,
+        };
+        const targetDays = days
+          .map((d) => dayMap[d])
+          .filter((d) => d !== undefined);
+
         const currentDay = now.getDay();
         let daysToAdd = 7;
         for (const targetDay of targetDays) {
@@ -40,29 +54,33 @@ function parseSimpleRRule(rrule: string, timezone: string = 'UTC'): Date | null 
         }
         nextDate.setDate(nextDate.getDate() + daysToAdd);
         break;
-      case 'MONTHLY':
-        const byMonthDay = parts['BYMONTHDAY'] ? parseInt(parts['BYMONTHDAY']) : 1;
+      }
+      case "MONTHLY": {
+        const byMonthDay = parts["BYMONTHDAY"]
+          ? Number.parseInt(parts["BYMONTHDAY"])
+          : 1;
         nextDate.setMonth(nextDate.getMonth() + 1);
         nextDate.setDate(byMonthDay);
         break;
+      }
       default:
         // Default to daily
         nextDate.setDate(nextDate.getDate() + 1);
     }
 
     // Handle BYHOUR
-    if (parts['BYHOUR']) {
-      nextDate.setHours(parseInt(parts['BYHOUR']), 0, 0, 0);
+    if (parts["BYHOUR"]) {
+      nextDate.setHours(Number.parseInt(parts["BYHOUR"]), 0, 0, 0);
     }
 
     // Handle BYMINUTE
-    if (parts['BYMINUTE']) {
-      nextDate.setMinutes(parseInt(parts['BYMINUTE']));
+    if (parts["BYMINUTE"]) {
+      nextDate.setMinutes(Number.parseInt(parts["BYMINUTE"]));
     }
 
     return nextDate;
   } catch (error) {
-    console.error('Failed to parse RRULE:', error);
+    console.error("Failed to parse RRULE:", error);
     return null;
   }
 }
@@ -89,7 +107,7 @@ export class TemplateService {
     }
 
     // Calculate next run time
-    const nextRunAt = parseSimpleRRule(input.rrule, input.timezone ?? 'UTC');
+    const nextRunAt = parseSimpleRRule(input.rrule, input.timezone ?? "UTC");
 
     return this.prisma.recurringTemplate.create({
       data: {
@@ -99,7 +117,7 @@ export class TemplateService {
         description: input.description,
         payload: input.payload as unknown as Prisma.JsonObject,
         rrule: input.rrule,
-        timezone: input.timezone ?? 'UTC',
+        timezone: input.timezone ?? "UTC",
         isActive: input.isActive ?? true,
         nextRunAt,
       },
@@ -125,7 +143,7 @@ export class TemplateService {
   async listTemplatesForBoard(boardId: string) {
     return this.prisma.recurringTemplate.findMany({
       where: { boardId },
-      orderBy: [{ isActive: 'desc' }, { nextRunAt: 'asc' }],
+      orderBy: [{ isActive: "desc" }, { nextRunAt: "asc" }],
       include: {
         owner: { select: { id: true, name: true } },
       },
@@ -133,7 +151,9 @@ export class TemplateService {
   }
 
   async updateTemplate(id: string, input: UpdateTemplateDto) {
-    const template = await this.prisma.recurringTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.recurringTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
       throw new NotFoundException(`Template not found: ${id}`);
     }
@@ -141,7 +161,10 @@ export class TemplateService {
     // Recalculate next run time if rrule changed
     let nextRunAt = template.nextRunAt;
     if (input.rrule && input.rrule !== template.rrule) {
-      nextRunAt = parseSimpleRRule(input.rrule, input.timezone ?? template.timezone);
+      nextRunAt = parseSimpleRRule(
+        input.rrule,
+        input.timezone ?? template.timezone,
+      );
     }
 
     return this.prisma.recurringTemplate.update({
@@ -161,7 +184,9 @@ export class TemplateService {
   }
 
   async toggleTemplate(id: string) {
-    const template = await this.prisma.recurringTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.recurringTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
       throw new NotFoundException(`Template not found: ${id}`);
     }
@@ -173,7 +198,9 @@ export class TemplateService {
   }
 
   async skipNextOccurrence(id: string) {
-    const template = await this.prisma.recurringTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.recurringTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
       throw new NotFoundException(`Template not found: ${id}`);
     }
@@ -188,7 +215,9 @@ export class TemplateService {
   }
 
   async runNow(id: string) {
-    const template = await this.prisma.recurringTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.recurringTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
       throw new NotFoundException(`Template not found: ${id}`);
     }
@@ -216,7 +245,9 @@ export class TemplateService {
   }
 
   async deleteTemplate(id: string) {
-    const template = await this.prisma.recurringTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.recurringTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
       throw new NotFoundException(`Template not found: ${id}`);
     }
@@ -235,7 +266,7 @@ export class TemplateService {
         isActive: true,
         nextRunAt: { lte: now },
       },
-      orderBy: { nextRunAt: 'asc' },
+      orderBy: { nextRunAt: "asc" },
     });
   }
 }

@@ -1,7 +1,7 @@
 import { DomainEvent } from '../base/domain-event';
-import { TaskId } from '../value-objects/task-id.vo';
-import { BoardId } from '../value-objects/board-id.vo';
-import { ColumnId } from '../value-objects/column-id.vo';
+import type { BoardId } from '../value-objects/board-id.vo';
+import type { ColumnId } from '../value-objects/column-id.vo';
+import type { TaskId } from '../value-objects/task-id.vo';
 
 /**
  * TaskCreatedEvent

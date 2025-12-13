@@ -1,112 +1,116 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import { IColumnRepository, ColumnData } from '@personal-kanban/shared';
-import { ColumnId } from '@personal-kanban/shared';
-import { BoardId } from '@personal-kanban/shared';
+import type {
+  BoardId,
+  ColumnData,
+  IColumnRepository,
+} from "@personal-kanban/shared";
+import { Injectable } from "@nestjs/common";
+import { ColumnId, PrismaService } from "@personal-kanban/shared";
 
 /**
  * Prisma implementation of IColumnRepository
  */
 @Injectable()
 export class PrismaColumnRepository implements IColumnRepository {
-    constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-    async findById(id: ColumnId): Promise<ColumnData | null> {
-        const column = await this.prisma.column.findUnique({
-            where: { id: id.value },
-        });
+  async findById(id: ColumnId): Promise<ColumnData | null> {
+    const column = await this.prisma.column.findUnique({
+      where: { id: id.value },
+    });
 
-        if (!column) {
-            return null;
-        }
-
-        return this.mapToColumnData(column);
+    if (!column) {
+      return null;
     }
 
-    async findByBoardId(boardId: BoardId): Promise<ColumnData[]> {
-        const columns = await this.prisma.column.findMany({
-            where: { boardId: boardId.value },
-        });
+    return this.mapToColumnData(column);
+  }
 
-        return columns.map((column) => this.mapToColumnData(column));
+  async findByBoardId(boardId: BoardId): Promise<ColumnData[]> {
+    const columns = await this.prisma.column.findMany({
+      where: { boardId: boardId.value },
+    });
+
+    return columns.map((column) => this.mapToColumnData(column));
+  }
+
+  async findByBoardIdOrdered(boardId: BoardId): Promise<ColumnData[]> {
+    const columns = await this.prisma.column.findMany({
+      where: { boardId: boardId.value },
+      orderBy: { position: "asc" },
+    });
+
+    return columns.map((column) => this.mapToColumnData(column));
+  }
+
+  async save(column: ColumnData): Promise<ColumnData> {
+    if (await this.exists(ColumnId.from(column.id))) {
+      return this.update(ColumnId.from(column.id), column);
     }
+    return this.create(column);
+  }
 
-    async findByBoardIdOrdered(boardId: BoardId): Promise<ColumnData[]> {
-        const columns = await this.prisma.column.findMany({
-            where: { boardId: boardId.value },
-            orderBy: { position: 'asc' },
-        });
+  async create(
+    column: Omit<ColumnData, "id" | "createdAt">,
+  ): Promise<ColumnData> {
+    const created = await this.prisma.column.create({
+      data: {
+        boardId: column.boardId,
+        name: column.name,
+        type: column.type as any,
+        wipLimit: column.wipLimit,
+        position: column.position,
+      },
+    });
 
-        return columns.map((column) => this.mapToColumnData(column));
-    }
+    return this.mapToColumnData(created);
+  }
 
-    async save(column: ColumnData): Promise<ColumnData> {
-        if (await this.exists(ColumnId.from(column.id))) {
-            return this.update(ColumnId.from(column.id), column);
-        }
-        return this.create(column);
-    }
+  async update(id: ColumnId, data: Partial<ColumnData>): Promise<ColumnData> {
+    const updateData: any = {};
 
-    async create(column: Omit<ColumnData, 'id' | 'createdAt'>): Promise<ColumnData> {
-        const created = await this.prisma.column.create({
-            data: {
-                boardId: column.boardId,
-                name: column.name,
-                type: column.type as any,
-                wipLimit: column.wipLimit,
-                position: column.position,
-            },
-        });
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.type !== undefined) updateData.type = data.type as any;
+    if (data.wipLimit !== undefined) updateData.wipLimit = data.wipLimit;
+    if (data.position !== undefined) updateData.position = data.position;
 
-        return this.mapToColumnData(created);
-    }
+    const updated = await this.prisma.column.update({
+      where: { id: id.value },
+      data: updateData,
+    });
 
-    async update(id: ColumnId, data: Partial<ColumnData>): Promise<ColumnData> {
-        const updateData: any = {};
+    return this.mapToColumnData(updated);
+  }
 
-        if (data.name !== undefined) updateData.name = data.name;
-        if (data.type !== undefined) updateData.type = data.type as any;
-        if (data.wipLimit !== undefined) updateData.wipLimit = data.wipLimit;
-        if (data.position !== undefined) updateData.position = data.position;
+  async delete(id: ColumnId): Promise<void> {
+    await this.prisma.column.delete({
+      where: { id: id.value },
+    });
+  }
 
-        const updated = await this.prisma.column.update({
-            where: { id: id.value },
-            data: updateData,
-        });
+  async exists(id: ColumnId): Promise<boolean> {
+    const count = await this.prisma.column.count({
+      where: { id: id.value },
+    });
+    return count > 0;
+  }
 
-        return this.mapToColumnData(updated);
-    }
+  async belongsToBoard(columnId: ColumnId, boardId: BoardId): Promise<boolean> {
+    const column = await this.findById(columnId);
+    return column?.boardId === boardId.value;
+  }
 
-    async delete(id: ColumnId): Promise<void> {
-        await this.prisma.column.delete({
-            where: { id: id.value },
-        });
-    }
-
-    async exists(id: ColumnId): Promise<boolean> {
-        const count = await this.prisma.column.count({
-            where: { id: id.value },
-        });
-        return count > 0;
-    }
-
-    async belongsToBoard(columnId: ColumnId, boardId: BoardId): Promise<boolean> {
-        const column = await this.findById(columnId);
-        return column?.boardId === boardId.value;
-    }
-
-    /**
-     * Map Prisma column to ColumnData
-     */
-    private mapToColumnData(column: any): ColumnData {
-        return {
-            id: column.id,
-            boardId: column.boardId,
-            name: column.name,
-            type: column.type,
-            wipLimit: column.wipLimit,
-            position: column.position,
-            createdAt: column.createdAt,
-        };
-    }
+  /**
+   * Map Prisma column to ColumnData
+   */
+  private mapToColumnData(column: any): ColumnData {
+    return {
+      id: column.id,
+      boardId: column.boardId,
+      name: column.name,
+      type: column.type,
+      wipLimit: column.wipLimit,
+      position: column.position,
+      createdAt: column.createdAt,
+    };
+  }
 }

@@ -1,14 +1,20 @@
-import { useState } from 'react';
-import { useUsers } from '@/hooks/useUsers';
-import { useBoards } from '@/hooks/useBoards';
-import { sendCapture } from '@/services/capture';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { useBoards } from '@/hooks/useBoards';
+import { useUsers } from '@/hooks/useUsers';
+import { sendCapture } from '@/services/capture';
 import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 function CaptureContentView() {
     const { users, ownerId, setOwnerId, loading: usersLoading } = useUsers();
@@ -67,13 +73,17 @@ function CaptureContentView() {
                         Capture Task
                     </CardTitle>
                     <CardDescription className="text-[20px] leading-[1.6] text-slate-600">
-                        Write a description of your task and select the board where it should be added.
+                        Write a description of your task and select the board where it should be
+                        added.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
-                            <Label htmlFor="user" className="text-base font-semibold text-slate-800">
+                            <Label
+                                htmlFor="user"
+                                className="text-base font-semibold text-slate-800"
+                            >
                                 User
                             </Label>
                             <Select
@@ -85,7 +95,11 @@ function CaptureContentView() {
                                     id="user"
                                     className="h-12 rounded-[12px] border-slate-200 bg-white text-base"
                                 >
-                                    <SelectValue placeholder={usersLoading ? 'Loading users...' : 'Select a user'} />
+                                    <SelectValue
+                                        placeholder={
+                                            usersLoading ? 'Loading users...' : 'Select a user'
+                                        }
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {users.map((user) => (
@@ -98,7 +112,10 @@ function CaptureContentView() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="board" className="text-base font-semibold text-slate-800">
+                            <Label
+                                htmlFor="board"
+                                className="text-base font-semibold text-slate-800"
+                            >
                                 Board
                             </Label>
                             <Select
@@ -115,8 +132,8 @@ function CaptureContentView() {
                                             !ownerId
                                                 ? 'Select a user first'
                                                 : boardsLoading
-                                                    ? 'Loading boards...'
-                                                    : 'Select a board'
+                                                  ? 'Loading boards...'
+                                                  : 'Select a board'
                                         }
                                     />
                                 </SelectTrigger>
@@ -131,7 +148,10 @@ function CaptureContentView() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="task-description" className="text-base font-semibold text-slate-800">
+                            <Label
+                                htmlFor="task-description"
+                                className="text-base font-semibold text-slate-800"
+                            >
                                 Task Description
                             </Label>
                             <Textarea
@@ -146,7 +166,14 @@ function CaptureContentView() {
 
                         <Button
                             type="submit"
-                            disabled={!ownerId || !selectedBoardId || !taskText.trim() || isSubmitting || boardsLoading || usersLoading}
+                            disabled={
+                                !ownerId ||
+                                !selectedBoardId ||
+                                !taskText.trim() ||
+                                isSubmitting ||
+                                boardsLoading ||
+                                usersLoading
+                            }
                             className="h-12 w-full rounded-[1234px] bg-indigo-600 text-base font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
                         >
                             {isSubmitting ? (

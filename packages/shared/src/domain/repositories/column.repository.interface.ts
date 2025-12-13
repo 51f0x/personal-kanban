@@ -1,5 +1,5 @@
-import { ColumnId } from '../value-objects/column-id.vo';
-import { BoardId } from '../value-objects/board-id.vo';
+import type { BoardId } from '../value-objects/board-id.vo';
+import type { ColumnId } from '../value-objects/column-id.vo';
 
 /**
  * Column data for persistence (matches Prisma Column model structure)

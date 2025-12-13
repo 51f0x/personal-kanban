@@ -1,84 +1,85 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import type { RegisterUserDto } from './dto/register-user.dto';
-import { PasswordService } from './password.service';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import { RegisterUserDto } from "./dto/register-user.dto";
+import { PasswordService } from "./password.service";
 
 @Injectable()
 export class UserService {
-    constructor(
-        private readonly prisma: PrismaService,
-        private readonly passwordService: PasswordService,
-    ) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordService: PasswordService,
+  ) {}
 
-    async registerUser(dto: RegisterUserDto) {
-        // Hash password if provided
-        let passwordHash: string | undefined;
-        if (dto.password) {
-            passwordHash = await this.passwordService.hashPassword(dto.password);
-        }
+  async registerUser(dto: RegisterUserDto) {
+    // Hash password if provided
+    let passwordHash: string | undefined;
+    if (dto.password) {
+      passwordHash = await this.passwordService.hashPassword(dto.password);
+    }
 
-        const result = await this.prisma.user.upsert({
-            where: { email: dto.email },
-            update: {
-                name: dto.name,
-                timezone: dto.timezone ?? 'UTC',
-                ...(passwordHash && { passwordHash }),
+    const result = await this.prisma.user.upsert({
+      where: { email: dto.email },
+      update: {
+        name: dto.name,
+        timezone: dto.timezone ?? "UTC",
+        ...(passwordHash && { passwordHash }),
+      },
+      create: {
+        email: dto.email,
+        name: dto.name,
+        timezone: dto.timezone ?? "UTC",
+        passwordHash,
+        boards: {
+          create: {
+            name: `${dto.name.split(" ")[0] ?? "My"} board`,
+            columns: {
+              create: [
+                { name: "Input", type: "INPUT", position: 0 },
+                { name: "Next actions", type: "CLARIFY", position: 1 },
+                { name: "In progress", type: "CONTEXT", position: 2 },
+                { name: "Done", type: "DONE", position: 99 },
+              ],
             },
-            create: {
-                email: dto.email,
-                name: dto.name,
-                timezone: dto.timezone ?? 'UTC',
-                passwordHash,
-                boards: {
-                    create: {
-                        name: `${dto.name.split(' ')[0] ?? 'My'} board`,
-                        columns: {
-                            create: [
-                                { name: 'Input', type: 'INPUT', position: 0 },
-                                { name: 'Next actions', type: 'CLARIFY', position: 1 },
-                                { name: 'In progress', type: 'CONTEXT', position: 2 },
-                                { name: 'Done', type: 'DONE', position: 99 },
-                            ],
-                        },
-                    },
-                },
-            },
-            include: {
-                boards: {
-                    include: { columns: true },
-                },
-            },
-        });
+          },
+        },
+      },
+      include: {
+        boards: {
+          include: { columns: true },
+        },
+      },
+    });
 
-        // Set the first board as default if no default is set
-        if (result.boards.length > 0 && !result.defaultBoardId) {
-            const firstBoard = result.boards[0];
-            await this.prisma.user.update({
-                where: { id: result.id },
-                data: { defaultBoardId: firstBoard.id },
-            });
-            result.defaultBoardId = firstBoard.id;
-        }
-
-        return result;
+    // Set the first board as default if no default is set
+    if (result.boards.length > 0 && !result.defaultBoardId) {
+      const firstBoard = result.boards[0];
+      await this.prisma.user.update({
+        where: { id: result.id },
+        data: { defaultBoardId: firstBoard.id },
+      });
+      result.defaultBoardId = firstBoard.id;
     }
 
-    listUsers() {
-        return this.prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
-    }
+    return result;
+  }
 
-    getUser(id: string) {
-        return this.prisma.user.findUnique({ where: { id } });
-    }
+  listUsers() {
+    return this.prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  }
 
-    findByEmail(email: string) {
-        return this.prisma.user.findUnique({ where: { email } });
-    }
+  getUser(id: string) {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
 
-    async updatePassword(userId: string, passwordHash: string) {
-        return this.prisma.user.update({
-            where: { id: userId },
-            data: { passwordHash },
-        });
-    }
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async updatePassword(userId: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+  }
 }

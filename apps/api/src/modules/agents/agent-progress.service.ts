@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { BoardGateway } from '../realtime/board.gateway';
-import type { AgentProcessingProgress } from './types';
+import { Injectable, Logger } from "@nestjs/common";
+
+import { BoardGateway } from "../realtime/board.gateway";
+import { AgentProcessingProgress } from "./types";
 
 /**
  * Agent Progress Service
@@ -16,10 +17,14 @@ export class AgentProgressService {
   /**
    * Emit agent processing progress to board clients
    */
-  emitAgentProgress(taskId: string, boardId: string, progress: AgentProcessingProgress): void {
+  emitAgentProgress(
+    taskId: string,
+    boardId: string,
+    progress: AgentProcessingProgress,
+  ): void {
     try {
       this.boardGateway.emitBoardUpdate(boardId, {
-        type: 'agent.progress',
+        type: "agent.progress",
         taskId,
         progress: {
           stage: progress.stage,
@@ -32,7 +37,7 @@ export class AgentProgressService {
       });
 
       this.logger.debug(
-        `Emitted agent progress for task ${taskId}: ${progress.stage} (${progress.progress}%)`
+        `Emitted agent progress for task ${taskId}: ${progress.stage} (${progress.progress}%)`,
       );
     } catch (error) {
       this.logger.error(`Failed to emit agent progress: ${error}`);
@@ -42,10 +47,12 @@ export class AgentProgressService {
   /**
    * Create a progress callback that can be passed to agent orchestrator
    */
-  createProgressCallback(taskId: string, boardId: string): (progress: AgentProcessingProgress) => void {
+  createProgressCallback(
+    taskId: string,
+    boardId: string,
+  ): (progress: AgentProcessingProgress) => void {
     return (progress: AgentProcessingProgress) => {
       this.emitAgentProgress(taskId, boardId, progress);
     };
   }
 }
-

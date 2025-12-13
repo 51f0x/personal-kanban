@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost } from './api';
 import type { Hint } from './types';
 
 export async function fetchHints(taskId: string): Promise<Hint[]> {
@@ -7,7 +7,7 @@ export async function fetchHints(taskId: string): Promise<Hint[]> {
 
 export async function applyHint(
     hintId: string,
-    dismiss: boolean = false,
+    dismiss = false,
 ): Promise<{ message: string; hint: Hint }> {
     return apiPost<{ message: string; hint: Hint }>(`/hints/${hintId}/apply`, { dismiss });
 }

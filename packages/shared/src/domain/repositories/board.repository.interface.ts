@@ -1,4 +1,4 @@
-import { BoardId } from '../value-objects/board-id.vo';
+import type { BoardId } from '../value-objects/board-id.vo';
 
 /**
  * Board data for persistence (matches Prisma Board model structure)

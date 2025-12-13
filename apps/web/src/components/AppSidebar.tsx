@@ -1,24 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import {
-    Home,
-    ListTodo,
-    Settings,
-    HelpCircle,
-    X,
-    Plus,
-    LogOut,
-    User,
-    Calendar,
-    Clock,
-    Archive,
-    Folder,
-    BarChart3,
-    Sparkles,
-    ChevronDown,
-} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,13 +8,32 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/utils/utils';
-import { useTasks } from '@/hooks/useTasks';
-import { useBoards } from '@/hooks/useBoards';
-import { createBoardWithDefaultColumns } from '@/services/boards';
-import { toast } from 'sonner';
 import { useSidebar } from '@/components/ui/sidebar';
+import { useAuth } from '@/contexts/AuthContext';
+import { useBoards } from '@/hooks/useBoards';
+import { useTasks } from '@/hooks/useTasks';
+import { createBoardWithDefaultColumns } from '@/services/boards';
+import { cn } from '@/utils/utils';
+import {
+    Archive,
+    BarChart3,
+    Calendar,
+    ChevronDown,
+    Clock,
+    Folder,
+    HelpCircle,
+    Home,
+    ListTodo,
+    LogOut,
+    Plus,
+    Settings,
+    Sparkles,
+    User,
+    X,
+} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface AppSidebarProps {
     boardId?: string;
@@ -146,7 +146,8 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
     // Get navigation item classes based on active state
     const getNavItemClasses = (path: string, isLink = true): string => {
         const active = isActive(path);
-        const baseClasses = 'box-border flex gap-2 items-center min-h-12 overflow-clip px-3 py-2.5 relative rounded-full shrink-0 w-full';
+        const baseClasses =
+            'box-border flex gap-2 items-center min-h-12 overflow-clip px-3 py-2.5 relative rounded-full shrink-0 w-full';
         const activeBg = active ? 'bg-indigo-700' : 'bg-indigo-600';
         const hoverClass = isLink ? 'hover:bg-indigo-700 transition-colors' : '';
         return cn(baseClasses, activeBg, hoverClass);
@@ -178,7 +179,8 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                         <Folder className="size-4" />
                                         <span className="font-medium">
                                             {boardId && boards.length > 0
-                                                ? boards.find((b) => b.id === boardId)?.name || 'Select Board'
+                                                ? boards.find((b) => b.id === boardId)?.name ||
+                                                  'Select Board'
                                                 : 'Select Board'}
                                         </span>
                                     </span>
@@ -199,7 +201,7 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                             onClick={() => navigate(`/board/${board.id}`)}
                                             className={cn(
                                                 'cursor-pointer',
-                                                boardId === board.id && 'bg-accent'
+                                                boardId === board.id && 'bg-accent',
                                             )}
                                         >
                                             <Folder className="size-4 mr-2" />
@@ -263,10 +265,14 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                         className={getNavItemClasses(boardId ? `/board/${boardId}` : '/capture')}
                     >
                         <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                            <ListTodo className={cn(
-                                "relative shrink-0 size-6",
-                                isActive(boardId ? `/board/${boardId}` : '/capture') ? "text-white" : "text-indigo-200"
-                            )} />
+                            <ListTodo
+                                className={cn(
+                                    'relative shrink-0 size-6',
+                                    isActive(boardId ? `/board/${boardId}` : '/capture')
+                                        ? 'text-white'
+                                        : 'text-indigo-200',
+                                )}
+                            />
                             <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                 Tasks
                             </p>
@@ -282,10 +288,12 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                 className={getNavItemClasses('/someday')}
                             >
                                 <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                    <Sparkles className={cn(
-                                        "relative shrink-0 size-6",
-                                        isActive('/someday') ? "text-white" : "text-indigo-200"
-                                    )} />
+                                    <Sparkles
+                                        className={cn(
+                                            'relative shrink-0 size-6',
+                                            isActive('/someday') ? 'text-white' : 'text-indigo-200',
+                                        )}
+                                    />
                                     <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                         Someday
                                     </p>
@@ -298,10 +306,12 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                 className={getNavItemClasses('/waiting')}
                             >
                                 <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                    <Clock className={cn(
-                                        "relative shrink-0 size-6",
-                                        isActive('/waiting') ? "text-white" : "text-indigo-200"
-                                    )} />
+                                    <Clock
+                                        className={cn(
+                                            'relative shrink-0 size-6',
+                                            isActive('/waiting') ? 'text-white' : 'text-indigo-200',
+                                        )}
+                                    />
                                     <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                         Waiting
                                     </p>
@@ -314,10 +324,12 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                 className={getNavItemClasses('/stale')}
                             >
                                 <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                    <Calendar className={cn(
-                                        "relative shrink-0 size-6",
-                                        isActive('/stale') ? "text-white" : "text-indigo-200"
-                                    )} />
+                                    <Calendar
+                                        className={cn(
+                                            'relative shrink-0 size-6',
+                                            isActive('/stale') ? 'text-white' : 'text-indigo-200',
+                                        )}
+                                    />
                                     <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                         Stale
                                     </p>
@@ -330,10 +342,14 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                 className={getNavItemClasses('/projects')}
                             >
                                 <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                    <Folder className={cn(
-                                        "relative shrink-0 size-6",
-                                        isActive('/projects') ? "text-white" : "text-indigo-200"
-                                    )} />
+                                    <Folder
+                                        className={cn(
+                                            'relative shrink-0 size-6',
+                                            isActive('/projects')
+                                                ? 'text-white'
+                                                : 'text-indigo-200',
+                                        )}
+                                    />
                                     <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                         Projects
                                     </p>
@@ -346,10 +362,14 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                                 className={getNavItemClasses('/analytics')}
                             >
                                 <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                                    <BarChart3 className={cn(
-                                        "relative shrink-0 size-6",
-                                        isActive('/analytics') ? "text-white" : "text-indigo-200"
-                                    )} />
+                                    <BarChart3
+                                        className={cn(
+                                            'relative shrink-0 size-6',
+                                            isActive('/analytics')
+                                                ? 'text-white'
+                                                : 'text-indigo-200',
+                                        )}
+                                    />
                                     <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                         Analytics
                                     </p>
@@ -359,15 +379,14 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
                     )}
 
                     {/* Settings */}
-                    <Link
-                        to="/settings"
-                        className={getNavItemClasses('/settings')}
-                    >
+                    <Link to="/settings" className={getNavItemClasses('/settings')}>
                         <div className="basis-0 flex gap-2 grow items-center min-h-px min-w-px relative shrink-0">
-                            <Settings className={cn(
-                                "relative shrink-0 size-6",
-                                isActive('/settings') ? "text-white" : "text-indigo-200"
-                            )} />
+                            <Settings
+                                className={cn(
+                                    'relative shrink-0 size-6',
+                                    isActive('/settings') ? 'text-white' : 'text-indigo-200',
+                                )}
+                            />
                             <p className="basis-0 font-bold grow leading-[22px] min-h-px min-w-px relative shrink-0 text-base text-white">
                                 Settings
                             </p>

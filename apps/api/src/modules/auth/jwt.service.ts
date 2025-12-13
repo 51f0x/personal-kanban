@@ -1,11 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService as NestJwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService as NestJwtService } from "@nestjs/jwt";
 
 export interface JwtPayload {
   sub: string; // user id
   email: string;
-  type: 'access' | 'refresh';
+  type: "access" | "refresh";
 }
 
 export interface TokenPair {
@@ -40,12 +40,12 @@ export class JwtService {
     const payload: JwtPayload = {
       sub: userId,
       email,
-      type: 'access',
+      type: "access",
     };
 
-    const expiresIn = this.config.get<string>('JWT_ACCESS_EXPIRY', '15m');
+    const expiresIn = this.config.get<string>("JWT_ACCESS_EXPIRY", "15m");
     return this.jwtService.signAsync(payload, {
-      secret: this.config.get<string>('JWT_SECRET'),
+      secret: this.config.get<string>("JWT_SECRET"),
       expiresIn: expiresIn as any,
     } as any);
   }
@@ -57,12 +57,12 @@ export class JwtService {
     const payload: JwtPayload = {
       sub: userId,
       email,
-      type: 'refresh',
+      type: "refresh",
     };
 
-    const expiresIn = this.config.get<string>('JWT_REFRESH_EXPIRY', '7d');
+    const expiresIn = this.config.get<string>("JWT_REFRESH_EXPIRY", "7d");
     return this.jwtService.signAsync(payload, {
-      secret: this.config.get<string>('JWT_SECRET'),
+      secret: this.config.get<string>("JWT_SECRET"),
       expiresIn: expiresIn as any,
     } as any);
   }
@@ -73,16 +73,16 @@ export class JwtService {
   async verifyToken(token: string): Promise<JwtPayload> {
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: this.config.get<string>('JWT_SECRET'),
+        secret: this.config.get<string>("JWT_SECRET"),
       });
 
       if (!payload.sub || !payload.email) {
-        throw new UnauthorizedException('Invalid token payload');
+        throw new UnauthorizedException("Invalid token payload");
       }
 
       return payload;
     } catch (error) {
-      throw new UnauthorizedException('Invalid or expired token');
+      throw new UnauthorizedException("Invalid or expired token");
     }
   }
 
@@ -90,10 +90,9 @@ export class JwtService {
    * Extract token from Authorization header
    */
   extractTokenFromHeader(authHeader: string | undefined): string | null {
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return null;
     }
     return authHeader.substring(7);
   }
 }
-

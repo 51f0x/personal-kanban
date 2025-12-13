@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Token, TokensList, marked } from 'marked';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import { marked, type Token, type TokensList } from 'marked';
 
 export interface EmailTask {
     id: string;
@@ -611,15 +611,17 @@ export class EmailService {
                 case 'table':
                     // Simple table representation
                     for (const row of token.rows) {
-                        text += `${row.map((cell: Token) => {
-                            if ('text' in cell && typeof cell.text === 'string') {
-                                return cell.text;
-                            }
-                            if ('tokens' in cell && Array.isArray(cell.tokens)) {
-                                return this.inlineToPlainText(cell.tokens);
-                            }
-                            return '';
-                        }).join(' | ')}\n`;
+                        text += `${row
+                            .map((cell: Token) => {
+                                if ('text' in cell && typeof cell.text === 'string') {
+                                    return cell.text;
+                                }
+                                if ('tokens' in cell && Array.isArray(cell.tokens)) {
+                                    return this.inlineToPlainText(cell.tokens);
+                                }
+                                return '';
+                            })
+                            .join(' | ')}\n`;
                     }
                     text += '\n';
                     break;

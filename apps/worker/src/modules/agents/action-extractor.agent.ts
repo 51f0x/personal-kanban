@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '@personal-kanban/shared';
 import { actionExtractionResponseSchema } from '../../shared/schemas/agent-schemas';
-import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
+import { validateDescription, validateTitle } from '../../shared/utils/input-validator.util';
+import { BaseAgent } from './base-agent';
+import { filterTrivialActions } from './utils/action-filter.util';
 
 export interface ActionItem {
     description: string;
@@ -132,22 +133,36 @@ export class ActionExtractorAgent extends BaseAgent {
 
             if (parseResult.success) {
                 const extraction = parseResult.data;
-                const actions = extraction.actions || [];
-                const totalActions = extraction.totalActions || actions.length;
+                const rawActions = extraction.actions || [];
+
+                // Filter out trivial actions
+                const filteredActions = filterTrivialActions(rawActions);
+                const filteredCount = rawActions.length - filteredActions.length;
+
+                if (filteredCount > 0) {
+                    this.logger.debug(
+                        `Filtered out ${filteredCount} trivial action(s) from ${rawActions.length} total`,
+                    );
+                }
+
+                const totalActions = filteredActions.length;
 
                 this.logOperation('Actions extracted', {
                     totalActions,
-                    actionsCount: actions.length,
+                    actionsCount: filteredActions.length,
+                    filteredCount,
                 });
 
                 return {
                     agentId: this.agentId,
                     success: true,
-                    confidence: actions.length > 0 ? 0.8 : 0.5,
-                    actions: actions.length > 0 ? actions : undefined,
+                    confidence: filteredActions.length > 0 ? 0.8 : 0.5,
+                    actions: filteredActions.length > 0 ? filteredActions : undefined,
                     totalActions,
                     metadata: {
                         model: this.model,
+                        filteredCount,
+                        originalCount: rawActions.length,
                     },
                 };
             }
@@ -190,7 +205,9 @@ export class ActionExtractorAgent extends BaseAgent {
             content += `\n\n[Content Summary]\n${contentSummary}`;
         }
 
-        return `Extract actionable items from the following task to help the human perform the task step-by-step. Break down the task into specific, concrete actions that need to be completed. Return a JSON object:
+        return `You are a sophisticated task support agent. Your role is to help humans complete tasks by breaking them down into meaningful, substantive actions. You act as a knowledgeable supporter, not a trivial assistant.
+
+Extract actionable items from the following task to help the human perform the task step-by-step. Break down the task into specific, concrete actions that provide real value. Return a JSON object:
 
 {
   "actions": [
@@ -206,16 +223,37 @@ export class ActionExtractorAgent extends BaseAgent {
 Task:
 ${content}
 
-Rules:
-- Your goal is to break down the task into clear, actionable steps that guide the human to complete the task successfully
+CRITICAL RULES - You are a sophisticated supporter:
+- Your goal is to break down the task into meaningful, substantive steps that guide the human to complete the task successfully
 - Extract 1-10 specific, actionable items that directly help complete the task
-- Each action should be concrete and completable - something the human can actually do
+- Each action should be concrete, completable, and provide real value - something meaningful the human needs to do
+- DO NOT include trivial actions such as:
+  * "Open browser" or "Navigate to URL" (these are obvious and don't help)
+  * "Read the content" or "View the page" (too generic)
+  * "Click on link" or "Visit website" (trivial navigation steps)
+  * Any action that is just about accessing or viewing content without doing something with it
+- Focus on actions that involve: analysis, decision-making, creation, implementation, configuration, problem-solving, or other substantive work
 - Assign priority based on importance and logical order
 - Estimate duration for each action if possible to help with planning
-- If the task is simple, return 1-2 actions
-- If complex, break it down into 3-10 steps that form a clear path to completion
+- If the task is simple, return 1-2 meaningful actions
+- If complex, break it down into 3-10 substantive steps that form a clear path to completion
 - Only extract actions from the provided content - do not invent actions
-- Process all content (including summaries) with the goal of creating a clear action plan for the human
+- Process all content (including summaries) with the goal of creating a clear, sophisticated action plan
+- Think like a knowledgeable colleague who understands the task deeply, not a basic assistant
+
+Examples of GOOD actions:
+- "Analyze the requirements and identify key constraints"
+- "Design the database schema based on the specifications"
+- "Implement authentication middleware using OAuth2"
+- "Write unit tests for the payment processing module"
+- "Review the API documentation and identify integration points"
+
+Examples of BAD actions (trivial - DO NOT include):
+- "Open the browser"
+- "Navigate to the website"
+- "Read the documentation"
+- "Click on the link"
+- "Visit the URL"
 
 Return only valid JSON, no markdown formatting.`;
     }

@@ -1,5 +1,5 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from './api';
-import { Task, MoveTaskResult, WipStatus } from './types';
+import { apiDelete, apiGet, apiPatch, apiPost } from './api';
+import type { MoveTaskResult, Task, WipStatus } from './types';
 
 export async function fetchTasks(boardId: string): Promise<Task[]> {
     return apiGet<Task[]>(`/boards/${boardId}/tasks`);
@@ -8,7 +8,7 @@ export async function fetchTasks(boardId: string): Promise<Task[]> {
 export async function moveTask(
     taskId: string,
     columnId: string,
-    forceWipOverride: boolean = false,
+    forceWipOverride = false,
     position?: number,
 ): Promise<MoveTaskResult> {
     return apiPost<MoveTaskResult>(`/tasks/${taskId}/move`, {

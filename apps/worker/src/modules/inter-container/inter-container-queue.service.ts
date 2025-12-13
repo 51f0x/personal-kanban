@@ -1,18 +1,18 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue, Worker, Job } from 'bullmq';
-import Redis from 'ioredis';
 import {
-    IInterContainerQueue,
-    ApiRequest,
-    ApiResponse,
-    GetUsersResponse,
-    GetTasksResponse,
-    GetTaskResponse,
-    GetColumnsResponse,
-    MoveTasksResponse,
+    type ApiRequest,
+    type ApiResponse,
     CreateEmailActionTokenResponse,
+    GetColumnsResponse,
+    GetTaskResponse,
+    GetTasksResponse,
+    GetUsersResponse,
+    type IInterContainerQueue,
+    MoveTasksResponse,
 } from '@personal-kanban/shared';
+import { type Job, Queue, Worker } from 'bullmq';
+import Redis from 'ioredis';
 
 /**
  * Worker-side Inter-Container Queue Service
@@ -29,18 +29,24 @@ export class InterContainerQueueService
     private responseWorker?: Worker<ApiResponse>;
     private pendingRequests = new Map<
         string,
-        { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }
+        {
+            resolve: (value: ApiResponse) => void;
+            reject: (error: unknown) => void;
+            timeout: NodeJS.Timeout;
+        }
     >();
 
     constructor(private readonly configService: ConfigService) {
         const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6379');
+        // Separate Redis connection for inter-container queue to isolate
+        // connection issues from event bus and BullMQ workers
         this.redis = new Redis(redisUrl, {
             retryStrategy: (times) => Math.min(times * 50, 2000),
         });
 
         const connection = {
             host: new URL(redisUrl).hostname,
-            port: parseInt(new URL(redisUrl).port || '6379'),
+            port: Number.parseInt(new URL(redisUrl).port || '6379'),
         };
 
         // Queue for worker -> API requests
@@ -50,37 +56,47 @@ export class InterContainerQueueService
     }
 
     async onModuleInit() {
-        // Start worker to receive responses from API
-        this.responseWorker = new Worker<ApiResponse>(
-            'api-responses',
-            async (job: Job<ApiResponse>) => {
-                const requestId = job.id?.replace('response-', '');
-                if (requestId && this.pendingRequests.has(requestId)) {
-                    const pending = this.pendingRequests.get(requestId)!;
+        try {
+            // Start worker to receive responses from API
+            this.responseWorker = new Worker<ApiResponse>(
+                'api-responses',
+                async (job: Job<ApiResponse>) => {
+                    const requestId = job.id?.replace('response-', '');
+                    if (!requestId) return;
+
+                    const pending = this.pendingRequests.get(requestId);
+                    if (!pending) return;
+
                     clearTimeout(pending.timeout);
                     pending.resolve(job.data);
                     this.pendingRequests.delete(requestId);
-                }
-            },
-            {
-                connection: {
-                    host: new URL(
-                        this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
-                    ).hostname,
-                    port: parseInt(
-                        new URL(
-                            this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
-                        ).port || '6379',
-                    ),
                 },
-            },
-        );
+                {
+                    connection: {
+                        host: new URL(
+                            this.configService.get<string>('REDIS_URL', 'redis://localhost:6379'),
+                        ).hostname,
+                        port: Number.parseInt(
+                            new URL(
+                                this.configService.get<string>(
+                                    'REDIS_URL',
+                                    'redis://localhost:6379',
+                                ),
+                            ).port || '6379',
+                        ),
+                    },
+                },
+            );
 
-        this.responseWorker.on('failed', (job, err) => {
-            this.logger.error(`Response ${job?.id} failed:`, err);
-        });
+            this.responseWorker.on('failed', (job, err) => {
+                this.logger.error(`Response ${job?.id} failed:`, err);
+            });
 
-        this.logger.log('Inter-container queue service initialized (worker side)');
+            this.logger.log('Inter-container queue service initialized (worker side)');
+        } catch (error) {
+            this.logger.error('Failed to initialize inter-container queue service:', error);
+            throw error; // Re-throw to prevent app from starting in bad state
+        }
     }
 
     async onModuleDestroy() {
@@ -111,7 +127,7 @@ export class InterContainerQueueService
 
             // Store pending request
             this.pendingRequests.set(requestId, {
-                resolve: resolve as any,
+                resolve: (value) => resolve(value as TResponse),
                 reject,
                 timeout: timeoutHandle,
             });

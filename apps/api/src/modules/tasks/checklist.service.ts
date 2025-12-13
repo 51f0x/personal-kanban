@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import { CreateChecklistItemDto, UpdateChecklistItemDto, ReorderChecklistDto } from './dto/checklist.input';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import type {
+  CreateChecklistItemDto,
+  ReorderChecklistDto,
+  UpdateChecklistItemDto,
+} from "./dto/checklist.input";
 
 @Injectable()
 export class ChecklistService {
@@ -44,7 +53,7 @@ export class ChecklistService {
   async listItemsForTask(taskId: string) {
     return this.prisma.checklistItem.findMany({
       where: { taskId },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
     });
   }
 
@@ -105,7 +114,9 @@ export class ChecklistService {
     const existingIds = new Set(items.map((i) => i.id));
     for (const id of input.itemIds) {
       if (!existingIds.has(id)) {
-        throw new BadRequestException(`Checklist item ${id} does not belong to task ${taskId}`);
+        throw new BadRequestException(
+          `Checklist item ${id} does not belong to task ${taskId}`,
+        );
       }
     }
 

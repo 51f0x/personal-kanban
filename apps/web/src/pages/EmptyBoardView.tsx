@@ -1,12 +1,12 @@
-import { useNavigate } from 'react-router-dom';
-import { Plus, FolderKanban } from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { createBoardWithDefaultColumns } from '@/services/boards';
+import { FolderKanban, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AppSidebar } from '@/components/AppSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
 
 export default function EmptyBoardView() {
     const navigate = useNavigate();
@@ -43,7 +43,8 @@ export default function EmptyBoardView() {
                             </div>
                             <CardTitle className="text-2xl">No Boards Yet</CardTitle>
                             <CardDescription className="text-base">
-                                Create your first board to start organizing your tasks with GTD principles.
+                                Create your first board to start organizing your tasks with GTD
+                                principles.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -56,7 +57,8 @@ export default function EmptyBoardView() {
                                 Create Your First Board
                             </Button>
                             <p className="text-center text-sm text-slate-500">
-                                Your board will come with default GTD columns: Input, Next Actions, In Progress, and Done.
+                                Your board will come with default GTD columns: Input, Next Actions,
+                                In Progress, and Done.
                             </p>
                         </CardContent>
                     </Card>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from 'react';
 
 /**
  * Hook to copy text to clipboard.
@@ -12,10 +12,9 @@ export function useClipboard() {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (error) {
-            console.error("Failed to copy text:", error);
+            console.error('Failed to copy text:', error);
         }
     };
 
     return { copy, copied };
 }
-

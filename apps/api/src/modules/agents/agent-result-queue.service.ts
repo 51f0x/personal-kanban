@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import type { Queue } from "bullmq";
+import { InjectQueue } from "@nestjs/bullmq";
+import { Injectable, Logger } from "@nestjs/common";
 
 export interface AgentResultJobData {
   taskId: string;
@@ -34,7 +34,8 @@ export class AgentResultQueueService {
   private readonly logger = new Logger(AgentResultQueueService.name);
 
   constructor(
-    @InjectQueue('agent-results') private readonly resultQueue: Queue<AgentResultJobData>,
+    @InjectQueue("agent-results")
+    private readonly resultQueue: Queue<AgentResultJobData>,
   ) {}
 
   /**
@@ -43,19 +44,18 @@ export class AgentResultQueueService {
    */
   async addResult(data: AgentResultJobData): Promise<void> {
     try {
-      await this.resultQueue.add(
-        'process-result',
-        data,
-        {
-          jobId: `agent-result-${data.taskId}`,
-          attempts: 1, // Results are idempotent
-        },
-      );
+      await this.resultQueue.add("process-result", data, {
+        jobId: `agent-result-${data.taskId}`,
+        attempts: 1, // Results are idempotent
+      });
 
       this.logger.log(`Queued agent result for task ${data.taskId}`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to queue agent result for task ${data.taskId}: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(
+        `Failed to queue agent result for task ${data.taskId}: ${errorMessage}`,
+      );
       throw error;
     }
   }

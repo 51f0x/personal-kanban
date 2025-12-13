@@ -1,16 +1,16 @@
-import { Logger } from '@nestjs/common';
+import type { Server, Socket } from "socket.io";
+import { Logger } from "@nestjs/common";
 import {
   ConnectedSocket,
   MessageBody,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
+  type OnGatewayConnection,
+  type OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+} from "@nestjs/websockets";
 
-@WebSocketGateway({ namespace: '/boards', cors: true })
+@WebSocketGateway({ namespace: "/boards", cors: true })
 export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(BoardGateway.name);
 
@@ -19,7 +19,7 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     const boardId = client.handshake.query.boardId;
-    if (typeof boardId === 'string') {
+    if (typeof boardId === "string") {
       client.join(boardId);
       this.logger.verbose(`Client ${client.id} joined board ${boardId}`);
     }
@@ -29,15 +29,20 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.verbose(`Client disconnected ${client.id}`);
   }
 
-  @SubscribeMessage('join')
-  handleJoin(@ConnectedSocket() client: Socket, @MessageBody() payload: { boardId?: string }) {
+  @SubscribeMessage("join")
+  handleJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { boardId?: string },
+  ) {
     if (payload?.boardId) {
       client.join(payload.boardId);
-      this.logger.verbose(`Client ${client.id} joined board ${payload.boardId}`);
+      this.logger.verbose(
+        `Client ${client.id} joined board ${payload.boardId}`,
+      );
     }
   }
 
   emitBoardUpdate(boardId: string, payload: unknown) {
-    this.server.to(boardId).emit('board:update', payload);
+    this.server.to(boardId).emit("board:update", payload);
   }
 }

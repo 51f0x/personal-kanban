@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchBoards, createBoardWithDefaultColumns } from '@/services/boards';
+import { createBoardWithDefaultColumns, fetchBoards } from '@/services/boards';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 // Background image from Figma
@@ -101,7 +101,10 @@ export default function LoginView() {
                     <form onSubmit={handleSubmit} className="flex w-full flex-col gap-6">
                         {/* Email Input */}
                         <div className="flex w-full flex-col gap-2">
-                            <Label htmlFor="email" className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800">
+                            <Label
+                                htmlFor="email"
+                                className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800"
+                            >
                                 Email Address
                             </Label>
                             <div className="relative">
@@ -121,7 +124,10 @@ export default function LoginView() {
 
                         {/* Password Input */}
                         <div className="flex w-full flex-col gap-2">
-                            <Label htmlFor="password" className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800">
+                            <Label
+                                htmlFor="password"
+                                className="text-[14px] font-bold leading-[20px] tracking-[-0.084px] text-slate-800"
+                            >
                                 Password
                             </Label>
                             <div className="relative">
@@ -200,7 +206,12 @@ export default function LoginView() {
                             className="h-12 flex-1 rounded-[1234px] border-slate-300 bg-white p-3 hover:bg-slate-50"
                         >
                             <div className="h-6 w-6">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-full w-full"
+                                >
                                     <path
                                         d="M24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 17.9895 4.3882 22.954 10.125 23.8542V15.4688H7.07812V12H10.125V9.35625C10.125 6.34875 11.9166 4.6875 14.6576 4.6875C15.9701 4.6875 17.3438 4.92188 17.3438 4.92188V7.875H15.8306C14.34 7.875 13.875 8.80008 13.875 9.75V12H17.2031L16.6711 15.4688H13.875V23.8542C19.6118 22.954 24 17.9895 24 12Z"
                                         fill="#1877F2"
@@ -216,7 +227,12 @@ export default function LoginView() {
                             className="h-12 flex-1 rounded-[1234px] border-slate-300 bg-white p-3 hover:bg-slate-50"
                         >
                             <div className="h-6 w-6">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-full w-full"
+                                >
                                     <path
                                         d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
                                         fill="currentColor"
@@ -233,7 +249,12 @@ export default function LoginView() {
                             className="h-12 flex-1 rounded-[1234px] border-slate-300 bg-white p-3 hover:bg-slate-50"
                         >
                             <div className="h-6 w-6">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-full w-full"
+                                >
                                     <path
                                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                                         fill="#4285F4"
@@ -259,4 +280,3 @@ export default function LoginView() {
         </div>
     );
 }
-

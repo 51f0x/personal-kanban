@@ -1,6 +1,6 @@
 import { AggregateRoot } from '../base/aggregate-root';
-import { BoardId } from '../value-objects/board-id.vo';
 import { BoardUpdatedEvent } from '../events';
+import { BoardId } from '../value-objects/board-id.vo';
 
 /**
  * Board Entity

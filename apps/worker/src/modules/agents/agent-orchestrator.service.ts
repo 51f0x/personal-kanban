@@ -1,33 +1,35 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@personal-kanban/shared';
-import { WebContentAgent } from './web-content.agent';
-import { ContentSummarizerAgent } from './content-summarizer.agent';
-import { TaskAnalyzerAgent } from './task-analyzer.agent';
-import { ContextExtractorAgent } from './context-extractor.agent';
-import { ActionExtractorAgent } from './action-extractor.agent';
-import { ToMarkdownAgent } from './to-markdown.agent';
-import { AgentSelectorAgent } from './agent-selector.agent';
-import { TaskHelpAgent } from './task-help.agent';
 import {
-    IEventBus,
-    AgentProgressEvent,
     AgentCompletedEvent,
-    TaskId,
+    AgentProgressEvent,
     BoardId,
+    type IEventBus,
+    TaskId,
 } from '@personal-kanban/shared';
-import type {
-    AgentProcessingResult,
+import { ActionExtractorAgent } from './action-extractor.agent';
+import { ActionItem } from './action-extractor.agent';
+import { AgentSelectorAgent } from './agent-selector.agent';
+import { ContentSummarizerAgent } from './content-summarizer.agent';
+import { ContextExtractorAgent } from './context-extractor.agent';
+import { SolutionProposerAgent } from './solution-proposer.agent';
+import { TaskAnalyzerAgent } from './task-analyzer.agent';
+import { TaskHelpAgent } from './task-help.agent';
+import { ToMarkdownAgent } from './to-markdown.agent';
+import {
+    ActionExtractionResult,
     AgentProcessingProgress,
+    AgentProcessingResult,
     AgentProgressCallback,
-    WebContentResult,
+    ContextExtractionResult,
+    MarkdownFormatResult,
+    SolutionProposalResult,
     SummarizationResult,
     TaskAnalysisResult,
-    ContextExtractionResult,
-    ActionExtractionResult,
     TaskHelpResult,
-    MarkdownFormatResult,
+    WebContentResult,
 } from './types';
-import type { ActionItem } from './action-extractor.agent';
+import { WebContentAgent } from './web-content.agent';
 
 /**
  * Agent Orchestrator
@@ -35,6 +37,20 @@ import type { ActionItem } from './action-extractor.agent';
  * Uses AI to intelligently decide which agents to run based on task content
  * Only runs agents that are relevant for the specific task
  * Creates hints from agent results that are attached to tasks
+ *
+ * Sophisticated Worker Chain:
+ * The orchestrator implements a sophisticated chain that acts as a knowledgeable supporter:
+ * 1. Agent Selection: AI determines which agents provide real value
+ * 2. Content Acquisition: Downloads and summarizes web content when valuable
+ * 3. Action Extraction: Extracts meaningful, substantive actions (filters trivial ones)
+ * 4. Solution Proposals: Proposes sophisticated solution approaches (filters trivial steps)
+ * 5. Task Help: Generates comprehensive guidance (avoids trivial steps)
+ * 6. Task Analysis: Extracts metadata to support task completion
+ * 7. Context Extraction: Categorizes and organizes tasks
+ *
+ * All agents are designed to act as sophisticated supporters, not trivial assistants.
+ * They focus on providing meaningful value: summarization, sophisticated proposals,
+ * substantive actions, and comprehensive guidance.
  */
 @Injectable()
 export class AgentOrchestrator {
@@ -51,6 +67,7 @@ export class AgentOrchestrator {
         private readonly toMarkdownAgent: ToMarkdownAgent,
         private readonly agentSelectorAgent: AgentSelectorAgent,
         private readonly taskHelpAgent: TaskHelpAgent,
+        private readonly solutionProposerAgent: SolutionProposerAgent,
     ) {}
 
     /**
@@ -301,9 +318,14 @@ export class AgentOrchestrator {
 
             let actionExtraction: ActionExtractionResult | undefined;
             if (agentSelection.shouldUseActionExtraction) {
-                await emitProgress('extracting-actions', 55, 'Extracting actions to guide analysis...', {
-                    agentId: 'action-extractor-agent',
-                });
+                await emitProgress(
+                    'extracting-actions',
+                    55,
+                    'Extracting actions to guide analysis...',
+                    {
+                        agentId: 'action-extractor-agent',
+                    },
+                );
                 this.logger.log('Extracting actions early to steer other agents');
 
                 actionExtraction = await this.actionExtractorAgent.extractActions(
@@ -343,18 +365,89 @@ export class AgentOrchestrator {
                 this.logger.log('Skipping action extraction - not selected by AI');
             }
 
-            // Step 5: Generate task help if we have web content (can use actions to guide)
+            // Step 5: Propose solutions after action extraction completes
+            // Only propose solutions if we have meaningful actions or substantial content
+            // This ensures we provide sophisticated support, not trivial recommendations
+            let solutionProposal: SolutionProposalResult | undefined;
+            const hasMeaningfulActions =
+                actionExtraction?.success &&
+                actionExtraction.actions &&
+                actionExtraction.actions.length > 0;
+            const hasSubstantialContent = webContent?.textContent || summarization?.summary;
+
+            if (hasMeaningfulActions || hasSubstantialContent) {
+                await emitProgress(
+                    'proposing-solutions',
+                    59,
+                    'Proposing sophisticated solutions for task completion...',
+                    {
+                        agentId: 'solution-proposer-agent',
+                    },
+                );
+                this.logger.log(
+                    'Proposing sophisticated solutions using extracted actions and content',
+                );
+
+                solutionProposal = await this.solutionProposerAgent.proposeSolutions(
+                    task.title,
+                    enhancedDescription,
+                    contentSummary,
+                    webContent?.textContent,
+                    actionExtraction?.actions,
+                );
+
+                if (solutionProposal.success) {
+                    await emitProgress(
+                        'proposing-solutions',
+                        60,
+                        `Proposed ${solutionProposal.totalSolutions || 0} sophisticated solutions`,
+                        {
+                            agentId: 'solution-proposer-agent',
+                            confidence: solutionProposal.confidence,
+                            solutionsCount: solutionProposal.totalSolutions || 0,
+                        },
+                    );
+                    this.logger.log(
+                        `Proposed ${solutionProposal.totalSolutions || 0} sophisticated solutions for task completion`,
+                    );
+                } else {
+                    errors.push(`Solution proposal failed: ${solutionProposal.error}`);
+                    await emitProgress(
+                        'error',
+                        60,
+                        `Solution proposal failed: ${solutionProposal.error}`,
+                        {
+                            agentId: 'solution-proposer-agent',
+                            error: solutionProposal.error,
+                        },
+                    );
+                    this.logger.warn(`Failed to propose solutions: ${solutionProposal.error}`);
+                }
+            } else {
+                this.logger.log(
+                    'Skipping solution proposal - insufficient content or actions for sophisticated proposals',
+                );
+            }
+
+            // Step 6: Generate task help if we have web content (can use actions to guide)
+            // Only generate help if we have substantial content to work with
+            // This ensures we provide comprehensive, sophisticated guidance
             let taskHelp: TaskHelpResult | undefined;
-            if (webContent?.success && (webContent.textContent || summarization?.summary)) {
+            const hasSubstantialContentForHelp =
+                webContent?.success &&
+                (webContent.textContent || summarization?.summary) &&
+                (webContent.textContent?.length || 0) > 100; // Ensure content is substantial
+
+            if (hasSubstantialContentForHelp && webContent) {
                 await emitProgress(
                     'generating-help',
                     60,
-                    'Generating comprehensive help from content...',
+                    'Generating comprehensive, sophisticated help from content...',
                     {
                         agentId: 'task-help-agent',
                     },
                 );
-                this.logger.log('Generating task help from web content');
+                this.logger.log('Generating sophisticated task help from web content');
 
                 taskHelp = await this.taskHelpAgent.generateHelp(
                     task.title,
@@ -365,32 +458,26 @@ export class AgentOrchestrator {
                 );
 
                 if (taskHelp.success) {
-                    await emitProgress(
-                        'generating-help',
-                        63,
-                        'Task help generated',
-                        {
-                            agentId: 'task-help-agent',
-                            confidence: taskHelp.confidence,
-                            helpTextLength: taskHelp.helpText?.length || 0,
-                        },
-                    );
+                    await emitProgress('generating-help', 63, 'Sophisticated task help generated', {
+                        agentId: 'task-help-agent',
+                        confidence: taskHelp.confidence,
+                        helpTextLength: taskHelp.helpText?.length || 0,
+                    });
                 } else {
                     errors.push(`Task help generation failed: ${taskHelp.error}`);
-                    await emitProgress(
-                        'error',
-                        63,
-                        `Help generation failed: ${taskHelp.error}`,
-                        {
-                            agentId: 'task-help-agent',
-                            error: taskHelp.error,
-                        },
-                    );
+                    await emitProgress('error', 63, `Help generation failed: ${taskHelp.error}`, {
+                        agentId: 'task-help-agent',
+                        error: taskHelp.error,
+                    });
                     this.logger.warn(`Failed to generate task help: ${taskHelp.error}`);
                 }
+            } else {
+                this.logger.log(
+                    'Skipping task help generation - insufficient content for comprehensive help',
+                );
             }
 
-            // Step 6: Run selected analysis agents in parallel (can use actions to guide)
+            // Step 7: Run selected analysis agents in parallel (can use actions to guide)
             await emitProgress('analyzing-task', 65, 'Running selected AI agents...');
             this.logger.log(
                 `Running parallel agent analysis (selected agents: TaskAnalysis=${agentSelection.shouldUseTaskAnalysis}, ContextExtraction=${agentSelection.shouldUseContextExtraction})...`,
@@ -524,6 +611,7 @@ export class AgentOrchestrator {
                 taskAnalysis,
                 contextExtraction,
                 actionExtraction,
+                solutionProposal,
             }).filter((v) => v && typeof v === 'object' && 'success' in v && v.success).length;
 
             await emitProgress('completed', 100, 'Agent processing completed', {
@@ -550,6 +638,7 @@ export class AgentOrchestrator {
                 taskAnalysis,
                 contextExtraction,
                 actionExtraction,
+                solutionProposal,
                 // markdownFormat is set later after hints are auto-applied
                 markdownFormat: undefined,
                 processingTimeMs,
@@ -597,5 +686,4 @@ export class AgentOrchestrator {
             };
         }
     }
-
 }

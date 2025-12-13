@@ -1,11 +1,11 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@personal-kanban/shared';
-import type { Job } from 'bullmq';
-import { TaskProcessorService } from './task-processor.service';
+import { Job } from 'bullmq';
 import { AgentResultSenderService } from './agent-result-sender.service';
-import type { AgentProgressCallback } from './types';
+import { TaskProcessorService } from './task-processor.service';
+import { AgentProgressCallback } from './types';
 
 interface AgentProcessingJobData {
     taskId: string;
@@ -18,7 +18,7 @@ interface AgentProcessingJobData {
  * Processes tasks with agents and reports progress via HTTP callbacks
  */
 @Processor('agent-processing')
-export class AgentJobProcessor extends WorkerHost {
+export class AgentJobProcessor extends WorkerHost implements OnApplicationShutdown {
     private readonly logger = new Logger(AgentJobProcessor.name);
     private readonly apiBaseUrl: string;
     private readonly internalServiceToken: string | undefined;
@@ -34,8 +34,24 @@ export class AgentJobProcessor extends WorkerHost {
         this.internalServiceToken = this.configService.get<string>('INTERNAL_SERVICE_TOKEN');
     }
 
+    async onApplicationShutdown(signal?: string) {
+        this.logger.log(`Shutting down agent job processor (signal: ${signal})`);
+        // WorkerHost handles cleanup automatically, but we log for visibility
+    }
+
     async process(job: Job<AgentProcessingJobData>): Promise<void> {
         const { taskId, boardId } = job.data;
+
+        // Validate job data
+        if (!taskId || typeof taskId !== 'string' || taskId.trim().length === 0) {
+            throw new Error('Invalid taskId in job data: taskId must be a non-empty string');
+        }
+
+        if (boardId !== undefined && (typeof boardId !== 'string' || boardId.trim().length === 0)) {
+            throw new Error(
+                'Invalid boardId in job data: boardId must be a non-empty string if provided',
+            );
+        }
 
         this.logger.log(`Processing agent job for task ${taskId}`);
 

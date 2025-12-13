@@ -1,8 +1,8 @@
 import { AggregateRoot } from '../base/aggregate-root';
-import { ColumnId } from '../value-objects/column-id.vo';
 import { BoardId } from '../value-objects/board-id.vo';
-import { WipLimit } from '../value-objects/wip-limit.vo';
+import { ColumnId } from '../value-objects/column-id.vo';
 import { Position } from '../value-objects/position.vo';
+import { WipLimit } from '../value-objects/wip-limit.vo';
 
 /**
  * Column Entity

@@ -91,6 +91,23 @@ export interface TaskHelpResult extends AgentResult {
 }
 
 /**
+ * Solution proposal result
+ */
+export interface SolutionProposalResult extends AgentResult {
+    solutions?: Array<{
+        title: string;
+        description: string;
+        approach: string;
+        steps: string[];
+        pros?: string[];
+        cons?: string[];
+        estimatedEffort?: string;
+        confidence?: number;
+    }>;
+    totalSolutions?: number;
+}
+
+/**
  * Agent processing progress stage
  */
 export type AgentProcessingStage =
@@ -103,6 +120,7 @@ export type AgentProcessingStage =
     | 'analyzing-task'
     | 'extracting-context'
     | 'extracting-actions'
+    | 'proposing-solutions'
     | 'formatting-markdown'
     | 'applying-results'
     | 'completed'
@@ -145,6 +163,7 @@ export interface AgentProcessingResult {
     contextExtraction?: ContextExtractionResult;
     actionExtraction?: ActionExtractionResult;
     taskHelp?: TaskHelpResult;
+    solutionProposal?: SolutionProposalResult;
     markdownFormat?: MarkdownFormatResult;
     processingTimeMs?: number;
     errors?: string[];

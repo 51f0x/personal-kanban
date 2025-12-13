@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BaseAgent } from './base-agent';
 import { validateContentSize } from '../../shared/utils/input-validator.util';
-import type { AgentResult } from './types';
+import { BaseAgent } from './base-agent';
+import { AgentResult } from './types';
 
 export interface MarkdownFormatResult extends AgentResult {
-  formattedDescription: string;
-  originalLength: number;
-  formattedLength: number;
+    formattedDescription: string;
+    originalLength: number;
+    formattedLength: number;
 }
 
 /**
@@ -17,123 +17,125 @@ export interface MarkdownFormatResult extends AgentResult {
  */
 @Injectable()
 export class ToMarkdownAgent extends BaseAgent {
-  readonly agentId = 'to-markdown-agent';
+    readonly agentId = 'to-markdown-agent';
 
-  constructor(config: ConfigService) {
-    super(config, ToMarkdownAgent.name);
-  }
-
-  /**
-   * Format task description to markdown
-   * Converts plain text or poorly formatted text to well-structured markdown
-   */
-  async formatToMarkdown(
-    title: string,
-    description?: string,
-  ): Promise<MarkdownFormatResult> {
-    // If no description, nothing to format
-    if (!description || description.trim().length === 0) {
-      return {
-        agentId: this.agentId,
-        success: true,
-        confidence: 1.0,
-        formattedDescription: '',
-        originalLength: 0,
-        formattedLength: 0,
-      };
+    constructor(config: ConfigService) {
+        super(config, ToMarkdownAgent.name);
     }
 
-    try {
-      await this.ensureModel();
+    /**
+     * Format task description to markdown
+     * Converts plain text or poorly formatted text to well-structured markdown
+     */
+    async formatToMarkdown(title: string, description?: string): Promise<MarkdownFormatResult> {
+        // If no description, nothing to format
+        if (!description || description.trim().length === 0) {
+            return {
+                agentId: this.agentId,
+                success: true,
+                confidence: 1.0,
+                formattedDescription: '',
+                originalLength: 0,
+                formattedLength: 0,
+            };
+        }
 
-      // Validate content size
-      const contentValidation = validateContentSize(description);
-      if (!contentValidation.valid) {
-        return {
-          agentId: this.agentId,
-          success: false,
-          confidence: 0,
-          error: contentValidation.error || 'Description too long to format',
-          formattedDescription: description,
-          originalLength: description.length,
-          formattedLength: description.length,
-        };
-      }
+        try {
+            await this.ensureModel();
 
-      const prompt = this.buildFormatPrompt(title, description);
+            // Validate content size
+            const contentValidation = validateContentSize(description);
+            if (!contentValidation.valid) {
+                return {
+                    agentId: this.agentId,
+                    success: false,
+                    confidence: 0,
+                    error: contentValidation.error || 'Description too long to format',
+                    formattedDescription: description,
+                    originalLength: description.length,
+                    formattedLength: description.length,
+                };
+            }
 
-      this.logger.log(`Formatting description to markdown for task: ${title.substring(0, 50)}...`);
+            const prompt = this.buildFormatPrompt(title, description);
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: 'json',
-            options: {
-              temperature: 0.2, // Low temperature for consistent formatting
-            },
-          }),
-        'format-description-to-markdown',
-      );
+            this.logger.log(
+                `Formatting description to markdown for task: ${title.substring(0, 50)}...`,
+            );
 
-      const formatText = response.response || '';
+            const response = await this.callLlm(
+                () =>
+                    this.ollama.generate({
+                        model: this.model,
+                        prompt,
+                        stream: false,
+                        format: 'json',
+                        options: {
+                            temperature: 0.2, // Low temperature for consistent formatting
+                        },
+                    }),
+                'format-description-to-markdown',
+            );
 
-      try {
-        const formatResult = JSON.parse(formatText) as {
-          formattedDescription: string;
-          confidence?: number;
-        };
+            const formatText = response.response || '';
 
-        const formattedDescription = formatResult.formattedDescription || description;
+            try {
+                const formatResult = JSON.parse(formatText) as {
+                    formattedDescription: string;
+                    confidence?: number;
+                };
 
-        return {
-          agentId: this.agentId,
-          success: true,
-          confidence: formatResult.confidence || 0.9,
-          formattedDescription,
-          originalLength: description.length,
-          formattedLength: formattedDescription.length,
-          metadata: {
-            model: this.model,
-            originalLength: description.length,
-            formattedLength: formattedDescription.length,
-          },
-        };
-      } catch (parseError) {
-        this.logger.warn('Failed to parse markdown format response, using original description', parseError);
-        // Return original description if parsing fails
-        return {
-          agentId: this.agentId,
-          success: false,
-          confidence: 0.5,
-          error: 'Failed to parse format response',
-          formattedDescription: description,
-          originalLength: description.length,
-          formattedLength: description.length,
-        };
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error formatting description to markdown: ${errorMessage}`);
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: errorMessage,
-        formattedDescription: description,
-        originalLength: description.length,
-        formattedLength: description.length,
-      };
+                const formattedDescription = formatResult.formattedDescription || description;
+
+                return {
+                    agentId: this.agentId,
+                    success: true,
+                    confidence: formatResult.confidence || 0.9,
+                    formattedDescription,
+                    originalLength: description.length,
+                    formattedLength: formattedDescription.length,
+                    metadata: {
+                        model: this.model,
+                        originalLength: description.length,
+                        formattedLength: formattedDescription.length,
+                    },
+                };
+            } catch (parseError) {
+                this.logger.warn(
+                    'Failed to parse markdown format response, using original description',
+                    parseError,
+                );
+                // Return original description if parsing fails
+                return {
+                    agentId: this.agentId,
+                    success: false,
+                    confidence: 0.5,
+                    error: 'Failed to parse format response',
+                    formattedDescription: description,
+                    originalLength: description.length,
+                    formattedLength: description.length,
+                };
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Error formatting description to markdown: ${errorMessage}`);
+            return {
+                agentId: this.agentId,
+                success: false,
+                confidence: 0,
+                error: errorMessage,
+                formattedDescription: description,
+                originalLength: description.length,
+                formattedLength: description.length,
+            };
+        }
     }
-  }
 
-  /**
-   * Build the markdown formatting prompt
-   */
-  private buildFormatPrompt(title: string, description: string): string {
-    return `Format the following task description into well-structured markdown. Return a JSON object:
+    /**
+     * Build the markdown formatting prompt
+     */
+    private buildFormatPrompt(title: string, description: string): string {
+        return `Format the following task description into well-structured markdown. Return a JSON object:
 
 {
   "formattedDescription": string (markdown formatted description),
@@ -159,6 +161,5 @@ Rules:
 - Do not invent content - only format what's provided
 
 Return only valid JSON, no markdown formatting.`;
-  }
+    }
 }
-

@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '@personal-kanban/shared';
+import { taskHelpResponseSchema } from '../../shared/schemas/agent-schemas';
 import { validateDescription } from '../../shared/utils/input-validator.util';
-import type { ActionItem } from './action-extractor.agent';
+import { ActionItem } from './action-extractor.agent';
+import { BaseAgent } from './base-agent';
 
 export interface TaskHelpResult {
     agentId: string;
@@ -93,26 +94,7 @@ export class TaskHelpAgent extends BaseAgent {
             // Parse and validate JSON
             const parseResult = parseAndValidateJson(
                 helpText,
-                {
-                    type: 'object',
-                    properties: {
-                        helpText: { type: 'string' },
-                        keySteps: {
-                            type: 'array',
-                            items: { type: 'string' },
-                        },
-                        prerequisites: {
-                            type: 'array',
-                            items: { type: 'string' },
-                        },
-                        resources: {
-                            type: 'array',
-                            items: { type: 'string' },
-                        },
-                        confidence: { type: 'number', minimum: 0, maximum: 1 },
-                    },
-                    required: ['helpText', 'confidence'],
-                },
+                taskHelpResponseSchema,
                 {
                     warn: (msg, ...args) => this.logger.warn(msg, ...args),
                 },
@@ -207,8 +189,7 @@ export class TaskHelpAgent extends BaseAgent {
             // Truncate web content to reasonable length for prompt (keep first 10000 chars)
             const truncatedContent =
                 webContent.length > 10000
-                    ? webContent.substring(0, 10000) +
-                      '\n\n[Content truncated - showing first 10000 characters]'
+                    ? `${webContent.substring(0, 10000)}\n\n[Content truncated - showing first 10000 characters]`
                     : webContent;
             contentText = `\n\nContent from URL:\n${truncatedContent}`;
         } else if (contentSummary) {
@@ -217,7 +198,7 @@ export class TaskHelpAgent extends BaseAgent {
 
         let actionsText = '';
         if (suggestedActions && suggestedActions.length > 0) {
-            actionsText = `\n\n[Suggested Actions to Structure Help]\n`;
+            actionsText = '\n\n[Suggested Actions to Structure Help]\n';
             actionsText += suggestedActions
                 .map(
                     (action, idx) =>
@@ -228,11 +209,11 @@ export class TaskHelpAgent extends BaseAgent {
                 '\n\nUse these suggested actions to structure your help text. Align your help content, key steps, prerequisites, and resources with these actions. Ensure your help text guides the user through completing these specific actions.';
         }
 
-        return `You are a helpful assistant that generates comprehensive, actionable guidance to help users complete tasks. Your goal is to create complete help text that enables the user to successfully fulfill the task.
+        return `You are a sophisticated task support assistant. Your role is to help humans complete tasks by providing comprehensive, meaningful guidance. You act as a knowledgeable supporter who understands the task deeply, not a trivial assistant.
 
 Analyze the task and the provided content from a URL, then generate detailed help that:
-1. Explains what needs to be done clearly
-2. Provides step-by-step guidance
+1. Explains what needs to be done clearly and with depth
+2. Provides step-by-step guidance that focuses on substantive work
 3. Includes all necessary information from the content
 4. Ensures the user has everything needed to complete the task
 5. Is complete enough that the user can finish the task without needing to revisit the original URL
@@ -250,14 +231,20 @@ Generate a JSON object with the following structure:
   "confidence": number (0-1, how confident you are that this help is complete and accurate)
 }
 
-Rules:
+CRITICAL RULES - You are a sophisticated supporter:
 - The helpText MUST be comprehensive and complete - it should contain all the information from the content that the user needs to complete the task
 - Extract and include specific details, instructions, requirements, and steps from the content
-- Make the help actionable - use clear, direct language
+- Make the help actionable - use clear, direct language focused on substantive work
 - Include relevant context, requirements, and constraints from the content
 - The help should be self-contained - the user should be able to complete the task using only this help text
-- Key steps should be clear, sequential actions
-- Prerequisites should list what's needed before starting
+- Key steps should be clear, sequential, substantive actions
+- DO NOT include trivial steps such as:
+  * "Open browser" or "Navigate to URL" (obvious and unhelpful)
+  * "Read the content" or "View the page" (too generic)
+  * "Click on link" or "Visit website" (trivial navigation)
+  * Any step that is just about accessing content without doing something meaningful with it
+- Focus on steps that involve: analysis, design, implementation, configuration, problem-solving, decision-making, or other substantive work
+- Prerequisites should list what's needed before starting (tools, accounts, information, etc.)
 - Resources should include any tools, links, or documentation mentioned
 - Set confidence based on how complete and accurate the help is (higher if you extracted all necessary information)
 - Only use information from the provided task and content - do not invent information
@@ -265,6 +252,20 @@ Rules:
 - If suggested actions are provided, structure your help text around these actions - ensure your help guides the user through completing each suggested action
 - Align your key steps with the suggested actions when available, providing detailed guidance for each action
 - Include prerequisites and resources that are specifically needed for the suggested actions
+- Think like an expert who understands the domain and can provide sophisticated guidance
+
+Examples of GOOD key steps:
+- "Analyze the requirements and identify key technical constraints"
+- "Design the system architecture based on scalability needs"
+- "Implement authentication using OAuth2 with proper token management"
+- "Configure the database with appropriate indexes for performance"
+- "Write comprehensive unit tests covering edge cases"
+
+Examples of BAD key steps (trivial - DO NOT include):
+- "Open the browser and navigate to the website"
+- "Read the documentation"
+- "Click on the link"
+- "Visit the URL"
 
 Return only valid JSON, no markdown formatting.`;
     }

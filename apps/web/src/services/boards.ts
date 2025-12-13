@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from './api';
+import { apiDelete, apiGet, apiPatch, apiPost } from './api';
 import type { Board, ColumnType } from './types';
 
 export async function fetchBoards(ownerId: string): Promise<Board[]> {

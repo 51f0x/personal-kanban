@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@personal-kanban/shared';
+import { Prisma, TaskContext } from '@prisma/client';
 import { HintService } from './hint.service';
-import type {
-    AgentProcessingResult,
+import {
     AgentProcessingProgress,
+    AgentProcessingResult,
     AgentProgressCallback,
 } from './types';
-import type { Prisma, TaskContext } from '@prisma/client';
 
 /**
  * Agent Application Service

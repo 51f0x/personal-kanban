@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { IEventBus } from '@personal-kanban/shared';
-import { DomainEvent } from '@personal-kanban/shared';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import type { IEventBus } from '@personal-kanban/shared';
+import type { DomainEvent } from '@personal-kanban/shared';
 import Redis from 'ioredis';
 
 /**
@@ -18,6 +18,8 @@ export class RedisEventBus implements IEventBus, OnModuleInit, OnModuleDestroy {
     >();
 
     constructor(redisUrl?: string) {
+        // Separate Redis connection for event bus to isolate
+        // connection issues from inter-container queue and BullMQ workers
         this.redis = new Redis(redisUrl || process.env.REDIS_URL || 'redis://localhost:6379', {
             retryStrategy: (times) => {
                 const delay = Math.min(times * 50, 2000);
@@ -35,13 +37,21 @@ export class RedisEventBus implements IEventBus, OnModuleInit, OnModuleDestroy {
     }
 
     async onModuleInit() {
-        // Ensure stream exists
         try {
+            // Ensure stream exists
             await this.redis.xgroup('CREATE', this.streamName, 'event-handlers', '0', 'MKSTREAM');
-        } catch (error: any) {
+            this.logger.log('Redis event bus consumer group initialized');
+        } catch (error: unknown) {
             // Group already exists, that's fine
-            if (!error.message.includes('BUSYGROUP')) {
-                this.logger.warn('Could not create consumer group:', error.message);
+            if (error instanceof Error) {
+                if (error.message.includes('BUSYGROUP')) {
+                    this.logger.debug('Consumer group already exists');
+                } else {
+                    this.logger.warn('Could not create consumer group:', error.message);
+                    // Don't throw - consumer group might already exist from previous run
+                }
+            } else {
+                this.logger.warn('Could not create consumer group:', String(error));
             }
         }
     }
@@ -97,25 +107,25 @@ export class RedisEventBus implements IEventBus, OnModuleInit, OnModuleDestroy {
 
             this.logger.debug(`Published ${events.length} events`);
         } catch (error) {
-            this.logger.error(`Failed to publish events:`, error);
+            this.logger.error('Failed to publish events:', error);
             throw error;
         }
     }
 
     subscribe<T extends DomainEvent>(
-        eventType: new (...args: any[]) => T,
+        eventType: new (...args: unknown[]) => T,
         handler: (event: T) => Promise<void> | void,
     ): void {
         const eventName = eventType.name;
         if (!this.handlers.has(eventName)) {
             this.handlers.set(eventName, new Set());
         }
-        this.handlers.get(eventName)!.add(handler as (event: DomainEvent) => Promise<void> | void);
+        this.handlers.get(eventName)?.add(handler as (event: DomainEvent) => Promise<void> | void);
         this.logger.debug(`Subscribed handler for ${eventName}`);
     }
 
     unsubscribe<T extends DomainEvent>(
-        eventType: new (...args: any[]) => T,
+        eventType: new (...args: unknown[]) => T,
         handler: (event: T) => Promise<void> | void,
     ): void {
         const eventName = eventType.name;

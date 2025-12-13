@@ -1,5 +1,5 @@
 import { DomainEvent } from '../base/domain-event';
-import { BoardId } from '../value-objects/board-id.vo';
+import type { BoardId } from '../value-objects/board-id.vo';
 
 /**
  * BoardUpdatedEvent

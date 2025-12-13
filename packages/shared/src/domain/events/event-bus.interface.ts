@@ -1,4 +1,4 @@
-import { DomainEvent } from '../base/domain-event';
+import type { DomainEvent } from '../base/domain-event';
 
 /**
  * Event Bus Interface

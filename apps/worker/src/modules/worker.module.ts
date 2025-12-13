@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '../shared/config.module';
 import { DatabaseModule } from '@personal-kanban/shared';
-import { CaptureWorkerModule } from './capture/capture.module';
-import { IntegrationsModule } from './integrations/integrations.module';
+import { ConfigModule } from '../shared/config.module';
 import { AgentsModule } from './agents/agents.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { CaptureWorkerModule } from './capture/capture.module';
 import { EventsModule } from './events/events.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { InterContainerModule } from './inter-container/inter-container.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
     imports: [

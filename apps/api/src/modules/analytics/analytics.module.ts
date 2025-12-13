@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
-import { DatabaseModule } from '@personal-kanban/shared';
-import { AnalyticsController } from './analytics.controller';
-import { AnalyticsService } from './analytics.service';
+import { Module } from "@nestjs/common";
+import { DatabaseModule } from "@personal-kanban/shared";
+
+import { AnalyticsController } from "./analytics.controller";
+import { AnalyticsService } from "./analytics.service";
 
 @Module({
   imports: [DatabaseModule],

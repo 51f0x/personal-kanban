@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BaseAgent } from './base-agent';
 import { parseAndValidateJson } from '@personal-kanban/shared';
 import { agentSelectionResultSchema } from '../../shared/schemas/agent-schemas';
-import { validateTitle, validateDescription } from '../../shared/utils/input-validator.util';
+import { validateDescription, validateTitle } from '../../shared/utils/input-validator.util';
+import { BaseAgent } from './base-agent';
 
 /**
  * Agent Selection Result
@@ -141,7 +141,9 @@ export class AgentSelectorAgent extends BaseAgent {
             ? `\n\n[URL detected: ${urlContentLength ? `${urlContentLength} characters of content` : 'Content available'}]`
             : '\n\n[No URL detected]';
 
-        return `Analyze the following task and determine which specialized agents would be most useful for processing it. Return a JSON object with the following structure:
+        return `You are a sophisticated agent orchestrator. Your role is to intelligently select which agents would provide the most value for helping a human complete a task. You act as a strategic supporter who understands when different agents add real value.
+
+Analyze the following task and determine which specialized agents would be most useful for processing it. Return a JSON object with the following structure:
 
 {
   "shouldUseWebContent": boolean,
@@ -155,33 +157,37 @@ export class AgentSelectorAgent extends BaseAgent {
 
 Available Agents:
 1. **WebContent Agent**: Downloads and extracts content from URLs
-   - Use if: URL is present AND content needs to be downloaded
+   - Use if: URL is present AND content needs to be downloaded AND would provide valuable information
+   - Skip if: URL is trivial or content wouldn't add value
    
 2. **Summarization Agent**: Creates concise summaries of long content
-   - Use if: URL content is long (>500 chars) OR task needs content condensed
-   - Skip if: Content is already short or not needed
+   - Use if: URL content is long (>500 chars) AND summarization would help the human understand the task better
+   - Skip if: Content is already short or summarization wouldn't add value
 
 3. **Task Analysis Agent**: Analyzes task and suggests title, description, context, tags, priority
    - Use if: Task needs metadata extraction or improvement
-   - Usually: Always useful
+   - Usually: Always useful for providing structured support
 
 4. **Context Extractor Agent**: Extracts context, tags, and project hints
    - Use if: Task needs categorization, tagging, or project association
-   - Usually: Useful for most tasks
+   - Usually: Useful for most tasks to provide organizational support
 
-5. **Action Extractor Agent**: Breaks down task into actionable checklist items
-   - Use if: Task is complex and needs breakdown into steps
-   - Skip if: Task is simple/single action OR already broken down
+5. **Action Extractor Agent**: Breaks down task into meaningful, substantive actionable checklist items
+   - Use if: Task is complex and can be meaningfully broken down into substantive steps
+   - Skip if: Task is simple/single action OR already broken down OR would only generate trivial actions
 
 Task:
 ${taskText}${urlInfo}
 
-Guidelines:
-- Only select agents that would provide meaningful value for this specific task
-- Skip agents that wouldn't add value (e.g., don't summarize if content is already brief)
+CRITICAL GUIDELINES - You are a sophisticated orchestrator:
+- Only select agents that would provide meaningful, substantive value for this specific task
+- Skip agents that wouldn't add real value (e.g., don't summarize if content is already brief)
 - Always use TaskAnalysis for metadata extraction unless task is trivial
-- Use ActionExtraction only if task can be meaningfully broken down into steps
+- Use ActionExtraction only if task can be meaningfully broken down into substantive, non-trivial steps
+- Consider whether the task would benefit from sophisticated support (summarization, help generation, solution proposals)
+- Think strategically about which agents would help the human complete the task more effectively
 - Set confidence based on how certain you are about the selection (0.7-0.95 range)
+- Remember: The goal is to provide sophisticated support, not trivial assistance
 
 Return only valid JSON, no markdown formatting.`;
     }

@@ -1,33 +1,39 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-    ArrowLeft,
-    User,
-    Lock,
-    Bell,
-    Mail,
-    Palette,
-    Key,
-    Save,
-    Eye,
-    EyeOff,
-    CheckCircle2,
-    XCircle,
-    AlertCircle,
-} from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { AppSidebar } from '@/components/AppSidebar';
 import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
-import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Bell,
+    CheckCircle2,
+    Eye,
+    EyeOff,
+    Key,
+    Lock,
+    Mail,
+    Palette,
+    Save,
+    User,
+    XCircle,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'integrations' | 'appearance' | 'api';
 
@@ -427,7 +433,9 @@ function SettingsViewContent({
                         </Button>
                     </div>
                     <h1 className="text-3xl font-extrabold text-slate-800">Settings</h1>
-                    <p className="text-sm text-slate-600 mt-1">Manage your account and preferences</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                        Manage your account and preferences
+                    </p>
                 </div>
 
                 {/* Content */}
@@ -446,10 +454,11 @@ function SettingsViewContent({
                                                         key={tab.id}
                                                         type="button"
                                                         onClick={() => setActiveTab(tab.id)}
-                                                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${activeTab === tab.id
-                                                            ? 'bg-indigo-50 text-indigo-700 font-medium'
-                                                            : 'text-slate-700 hover:bg-slate-50'
-                                                            }`}
+                                                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                                                            activeTab === tab.id
+                                                                ? 'bg-indigo-50 text-indigo-700 font-medium'
+                                                                : 'text-slate-700 hover:bg-slate-50'
+                                                        }`}
                                                     >
                                                         <Icon className="h-5 w-5" />
                                                         <span>{tab.label}</span>
@@ -494,7 +503,10 @@ function SettingsViewContent({
                                             </div>
                                             <div className="space-y-2">
                                                 <Label htmlFor="timezone">Timezone</Label>
-                                                <Select value={timezone} onValueChange={setTimezone}>
+                                                <Select
+                                                    value={timezone}
+                                                    onValueChange={setTimezone}
+                                                >
                                                     <SelectTrigger id="timezone">
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -527,13 +539,21 @@ function SettingsViewContent({
                                         </CardHeader>
                                         <CardContent className="space-y-6">
                                             <div className="space-y-2">
-                                                <Label htmlFor="currentPassword">Current Password</Label>
+                                                <Label htmlFor="currentPassword">
+                                                    Current Password
+                                                </Label>
                                                 <div className="relative">
                                                     <Input
                                                         id="currentPassword"
-                                                        type={showCurrentPassword ? 'text' : 'password'}
+                                                        type={
+                                                            showCurrentPassword
+                                                                ? 'text'
+                                                                : 'password'
+                                                        }
                                                         value={currentPassword}
-                                                        onChange={(e) => setCurrentPassword(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setCurrentPassword(e.target.value)
+                                                        }
                                                         placeholder="Enter current password"
                                                     />
                                                     <Button
@@ -541,7 +561,11 @@ function SettingsViewContent({
                                                         variant="ghost"
                                                         size="icon"
                                                         className="absolute right-0 top-0 h-full"
-                                                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                                        onClick={() =>
+                                                            setShowCurrentPassword(
+                                                                !showCurrentPassword,
+                                                            )
+                                                        }
                                                     >
                                                         {showCurrentPassword ? (
                                                             <EyeOff className="h-4 w-4" />
@@ -558,7 +582,9 @@ function SettingsViewContent({
                                                         id="newPassword"
                                                         type={showNewPassword ? 'text' : 'password'}
                                                         value={newPassword}
-                                                        onChange={(e) => setNewPassword(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setNewPassword(e.target.value)
+                                                        }
                                                         placeholder="Enter new password"
                                                     />
                                                     <Button
@@ -566,7 +592,9 @@ function SettingsViewContent({
                                                         variant="ghost"
                                                         size="icon"
                                                         className="absolute right-0 top-0 h-full"
-                                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                                        onClick={() =>
+                                                            setShowNewPassword(!showNewPassword)
+                                                        }
                                                     >
                                                         {showNewPassword ? (
                                                             <EyeOff className="h-4 w-4" />
@@ -580,13 +608,21 @@ function SettingsViewContent({
                                                 </p>
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                                                <Label htmlFor="confirmPassword">
+                                                    Confirm New Password
+                                                </Label>
                                                 <div className="relative">
                                                     <Input
                                                         id="confirmPassword"
-                                                        type={showConfirmPassword ? 'text' : 'password'}
+                                                        type={
+                                                            showConfirmPassword
+                                                                ? 'text'
+                                                                : 'password'
+                                                        }
                                                         value={confirmPassword}
-                                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setConfirmPassword(e.target.value)
+                                                        }
                                                         placeholder="Confirm new password"
                                                     />
                                                     <Button
@@ -594,7 +630,11 @@ function SettingsViewContent({
                                                         variant="ghost"
                                                         size="icon"
                                                         className="absolute right-0 top-0 h-full"
-                                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                        onClick={() =>
+                                                            setShowConfirmPassword(
+                                                                !showConfirmPassword,
+                                                            )
+                                                        }
                                                     >
                                                         {showConfirmPassword ? (
                                                             <EyeOff className="h-4 w-4" />
@@ -605,7 +645,10 @@ function SettingsViewContent({
                                                 </div>
                                             </div>
                                             <Separator />
-                                            <Button onClick={handleChangePassword} disabled={loading}>
+                                            <Button
+                                                onClick={handleChangePassword}
+                                                disabled={loading}
+                                            >
                                                 <Lock className="h-4 w-4 mr-2" />
                                                 {loading ? 'Changing...' : 'Change Password'}
                                             </Button>
@@ -653,7 +696,8 @@ function SettingsViewContent({
                                                     <div className="space-y-0.5">
                                                         <Label>Quiet Hours</Label>
                                                         <p className="text-sm text-slate-500">
-                                                            Disable notifications during specified hours
+                                                            Disable notifications during specified
+                                                            hours
                                                         </p>
                                                     </div>
                                                     <Switch
@@ -664,21 +708,31 @@ function SettingsViewContent({
                                                 {quietHoursEnabled && (
                                                     <div className="grid grid-cols-2 gap-4 pl-4">
                                                         <div className="space-y-2">
-                                                            <Label htmlFor="quietStart">Start Time</Label>
+                                                            <Label htmlFor="quietStart">
+                                                                Start Time
+                                                            </Label>
                                                             <Input
                                                                 id="quietStart"
                                                                 type="time"
                                                                 value={quietHoursStart}
-                                                                onChange={(e) => setQuietHoursStart(e.target.value)}
+                                                                onChange={(e) =>
+                                                                    setQuietHoursStart(
+                                                                        e.target.value,
+                                                                    )
+                                                                }
                                                             />
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <Label htmlFor="quietEnd">End Time</Label>
+                                                            <Label htmlFor="quietEnd">
+                                                                End Time
+                                                            </Label>
                                                             <Input
                                                                 id="quietEnd"
                                                                 type="time"
                                                                 value={quietHoursEnd}
-                                                                onChange={(e) => setQuietHoursEnd(e.target.value)}
+                                                                onChange={(e) =>
+                                                                    setQuietHoursEnd(e.target.value)
+                                                                }
                                                             />
                                                         </div>
                                                     </div>
@@ -700,7 +754,8 @@ function SettingsViewContent({
                                             <CardHeader>
                                                 <CardTitle>IMAP Configuration</CardTitle>
                                                 <CardDescription>
-                                                    Configure email import settings for automatic task creation
+                                                    Configure email import settings for automatic
+                                                    task creation
                                                 </CardDescription>
                                             </CardHeader>
                                             <CardContent className="space-y-4">
@@ -710,7 +765,9 @@ function SettingsViewContent({
                                                         <Input
                                                             id="imapHost"
                                                             value={imapHost}
-                                                            onChange={(e) => setImapHost(e.target.value)}
+                                                            onChange={(e) =>
+                                                                setImapHost(e.target.value)
+                                                            }
                                                             placeholder="imap.example.com"
                                                         />
                                                     </div>
@@ -720,7 +777,9 @@ function SettingsViewContent({
                                                             id="imapPort"
                                                             type="number"
                                                             value={imapPort}
-                                                            onChange={(e) => setImapPort(e.target.value)}
+                                                            onChange={(e) =>
+                                                                setImapPort(e.target.value)
+                                                            }
                                                             placeholder="993"
                                                         />
                                                     </div>
@@ -730,7 +789,9 @@ function SettingsViewContent({
                                                     <Input
                                                         id="imapUsername"
                                                         value={imapUsername}
-                                                        onChange={(e) => setImapUsername(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setImapUsername(e.target.value)
+                                                        }
                                                         placeholder="your-email@example.com"
                                                     />
                                                 </div>
@@ -740,7 +801,9 @@ function SettingsViewContent({
                                                         id="imapPassword"
                                                         type="password"
                                                         value={imapPassword}
-                                                        onChange={(e) => setImapPassword(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setImapPassword(e.target.value)
+                                                        }
                                                         placeholder="Enter IMAP password"
                                                     />
                                                 </div>
@@ -750,8 +813,10 @@ function SettingsViewContent({
                                                         <div className="text-sm text-blue-800">
                                                             <p className="font-medium mb-1">Note</p>
                                                             <p>
-                                                                IMAP settings are configured at the server level. Contact your
-                                                                administrator to set up email integration.
+                                                                IMAP settings are configured at the
+                                                                server level. Contact your
+                                                                administrator to set up email
+                                                                integration.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -763,7 +828,8 @@ function SettingsViewContent({
                                             <CardHeader>
                                                 <CardTitle>SMTP Configuration</CardTitle>
                                                 <CardDescription>
-                                                    Configure email sending settings for notifications
+                                                    Configure email sending settings for
+                                                    notifications
                                                 </CardDescription>
                                             </CardHeader>
                                             <CardContent className="space-y-4">
@@ -773,7 +839,9 @@ function SettingsViewContent({
                                                         <Input
                                                             id="smtpHost"
                                                             value={smtpHost}
-                                                            onChange={(e) => setSmtpHost(e.target.value)}
+                                                            onChange={(e) =>
+                                                                setSmtpHost(e.target.value)
+                                                            }
                                                             placeholder="smtp.example.com"
                                                         />
                                                     </div>
@@ -783,7 +851,9 @@ function SettingsViewContent({
                                                             id="smtpPort"
                                                             type="number"
                                                             value={smtpPort}
-                                                            onChange={(e) => setSmtpPort(e.target.value)}
+                                                            onChange={(e) =>
+                                                                setSmtpPort(e.target.value)
+                                                            }
                                                             placeholder="587"
                                                         />
                                                     </div>
@@ -793,7 +863,9 @@ function SettingsViewContent({
                                                     <Input
                                                         id="smtpUsername"
                                                         value={smtpUsername}
-                                                        onChange={(e) => setSmtpUsername(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setSmtpUsername(e.target.value)
+                                                        }
                                                         placeholder="your-email@example.com"
                                                     />
                                                 </div>
@@ -803,7 +875,9 @@ function SettingsViewContent({
                                                         id="smtpPassword"
                                                         type="password"
                                                         value={smtpPassword}
-                                                        onChange={(e) => setSmtpPassword(e.target.value)}
+                                                        onChange={(e) =>
+                                                            setSmtpPassword(e.target.value)
+                                                        }
                                                         placeholder="Enter SMTP password"
                                                     />
                                                 </div>
@@ -813,8 +887,10 @@ function SettingsViewContent({
                                                         <div className="text-sm text-blue-800">
                                                             <p className="font-medium mb-1">Note</p>
                                                             <p>
-                                                                SMTP settings are configured at the server level. Contact your
-                                                                administrator to set up email notifications.
+                                                                SMTP settings are configured at the
+                                                                server level. Contact your
+                                                                administrator to set up email
+                                                                notifications.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -833,7 +909,9 @@ function SettingsViewContent({
                                     <Card>
                                         <CardHeader>
                                             <CardTitle>Appearance</CardTitle>
-                                            <CardDescription>Customize the look and feel of the application</CardDescription>
+                                            <CardDescription>
+                                                Customize the look and feel of the application
+                                            </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-6">
                                             <div className="space-y-4">
@@ -842,35 +920,48 @@ function SettingsViewContent({
                                                     <button
                                                         type="button"
                                                         onClick={() => handleThemeChange('light')}
-                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${theme === 'light'
-                                                            ? 'border-indigo-600 bg-indigo-50'
-                                                            : 'border-slate-200 hover:border-slate-300'
-                                                            }`}
+                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${
+                                                            theme === 'light'
+                                                                ? 'border-indigo-600 bg-indigo-50'
+                                                                : 'border-slate-200 hover:border-slate-300'
+                                                        }`}
                                                     >
-                                                        <div className="font-medium mb-1">Light</div>
-                                                        <div className="text-sm text-slate-600">Light theme</div>
+                                                        <div className="font-medium mb-1">
+                                                            Light
+                                                        </div>
+                                                        <div className="text-sm text-slate-600">
+                                                            Light theme
+                                                        </div>
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleThemeChange('dark')}
-                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${theme === 'dark'
-                                                            ? 'border-indigo-600 bg-indigo-50'
-                                                            : 'border-slate-200 hover:border-slate-300'
-                                                            }`}
+                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${
+                                                            theme === 'dark'
+                                                                ? 'border-indigo-600 bg-indigo-50'
+                                                                : 'border-slate-200 hover:border-slate-300'
+                                                        }`}
                                                     >
                                                         <div className="font-medium mb-1">Dark</div>
-                                                        <div className="text-sm text-slate-600">Dark theme</div>
+                                                        <div className="text-sm text-slate-600">
+                                                            Dark theme
+                                                        </div>
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleThemeChange('system')}
-                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${theme === 'system'
-                                                            ? 'border-indigo-600 bg-indigo-50'
-                                                            : 'border-slate-200 hover:border-slate-300'
-                                                            }`}
+                                                        className={`p-4 border-2 rounded-lg text-left transition-all ${
+                                                            theme === 'system'
+                                                                ? 'border-indigo-600 bg-indigo-50'
+                                                                : 'border-slate-200 hover:border-slate-300'
+                                                        }`}
                                                     >
-                                                        <div className="font-medium mb-1">System</div>
-                                                        <div className="text-sm text-slate-600">Follow system</div>
+                                                        <div className="font-medium mb-1">
+                                                            System
+                                                        </div>
+                                                        <div className="text-sm text-slate-600">
+                                                            Follow system
+                                                        </div>
                                                     </button>
                                                 </div>
                                             </div>
@@ -884,7 +975,8 @@ function SettingsViewContent({
                                         <CardHeader>
                                             <CardTitle>API & Tokens</CardTitle>
                                             <CardDescription>
-                                                Manage API tokens for capture endpoints and integrations
+                                                Manage API tokens for capture endpoints and
+                                                integrations
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-6">
@@ -893,10 +985,14 @@ function SettingsViewContent({
                                                     <div className="space-y-0.5">
                                                         <Label>Capture Token</Label>
                                                         <p className="text-sm text-slate-500">
-                                                            Token for browser extension and capture API
+                                                            Token for browser extension and capture
+                                                            API
                                                         </p>
                                                     </div>
-                                                    <Button variant="outline" onClick={generateCaptureToken}>
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={generateCaptureToken}
+                                                    >
                                                         Generate New
                                                     </Button>
                                                 </div>
@@ -905,7 +1001,11 @@ function SettingsViewContent({
                                                     <div className="flex gap-2">
                                                         <Input
                                                             id="captureToken"
-                                                            type={showCaptureToken ? 'text' : 'password'}
+                                                            type={
+                                                                showCaptureToken
+                                                                    ? 'text'
+                                                                    : 'password'
+                                                            }
                                                             value={captureToken}
                                                             readOnly
                                                             className="font-mono"
@@ -913,7 +1013,11 @@ function SettingsViewContent({
                                                         <Button
                                                             variant="outline"
                                                             size="icon"
-                                                            onClick={() => setShowCaptureToken(!showCaptureToken)}
+                                                            onClick={() =>
+                                                                setShowCaptureToken(
+                                                                    !showCaptureToken,
+                                                                )
+                                                            }
                                                         >
                                                             {showCaptureToken ? (
                                                                 <EyeOff className="h-4 w-4" />
@@ -924,8 +1028,12 @@ function SettingsViewContent({
                                                         <Button
                                                             variant="outline"
                                                             onClick={() => {
-                                                                navigator.clipboard.writeText(captureToken);
-                                                                toast.success('Token copied to clipboard');
+                                                                navigator.clipboard.writeText(
+                                                                    captureToken,
+                                                                );
+                                                                toast.success(
+                                                                    'Token copied to clipboard',
+                                                                );
                                                             }}
                                                         >
                                                             Copy
@@ -936,10 +1044,13 @@ function SettingsViewContent({
                                                     <div className="flex items-start gap-3">
                                                         <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
                                                         <div className="text-sm text-amber-800">
-                                                            <p className="font-medium mb-1">Security Warning</p>
+                                                            <p className="font-medium mb-1">
+                                                                Security Warning
+                                                            </p>
                                                             <p>
-                                                                Keep your tokens secure. Do not share them publicly or commit
-                                                                them to version control.
+                                                                Keep your tokens secure. Do not
+                                                                share them publicly or commit them
+                                                                to version control.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -949,11 +1060,13 @@ function SettingsViewContent({
                                             <div className="space-y-2">
                                                 <Label>API Endpoint</Label>
                                                 <div className="p-3 bg-slate-50 rounded-lg font-mono text-sm">
-                                                    {import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/capture
+                                                    {import.meta.env.VITE_API_URL ||
+                                                        'http://localhost:3000/api/v1'}
+                                                    /capture
                                                 </div>
                                                 <p className="text-xs text-slate-500">
-                                                    Use this endpoint with your capture token for browser extensions and
-                                                    integrations
+                                                    Use this endpoint with your capture token for
+                                                    browser extensions and integrations
                                                 </p>
                                             </div>
                                         </CardContent>

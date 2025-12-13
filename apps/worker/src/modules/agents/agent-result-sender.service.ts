@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bullmq';
 import type { AgentProcessingResult } from './types';
 
 export interface AgentResultJobData {
@@ -82,17 +82,13 @@ export class AgentResultSenderService {
                         : undefined,
                     errors: processingResult.errors,
                 },
-                processingTimeMs: processingResult.processingTimeMs,
+                processingTimeMs: processingResult.processingTimeMs || 0,
             };
 
-            await this.resultQueue.add(
-                'process-result',
-                resultData,
-                {
-                    jobId: `agent-result-${taskId}`,
-                    attempts: 1, // Results are idempotent
-                },
-            );
+            await this.resultQueue.add('process-result', resultData, {
+                jobId: `agent-result-${taskId}`,
+                attempts: 1, // Results are idempotent
+            });
 
             this.logger.log(`Sent agent result to API for task ${taskId}`);
         } catch (error) {

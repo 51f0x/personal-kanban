@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ColumnType, TaskEventType } from '@prisma/client';
-import { PrismaService } from '@personal-kanban/shared';
-import { BoardGateway } from '../realtime/board.gateway';
-import { ClarifyTaskDto } from './dto/clarify-task.input';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+import { ColumnType, TaskEventType } from "@prisma/client";
+
+import { BoardGateway } from "../realtime/board.gateway";
+import { ClarifyTaskDto } from "./dto/clarify-task.input";
 
 export interface ClarificationResult {
   task: {
@@ -36,12 +41,12 @@ export class ClarificationService {
         column: { type: ColumnType.INPUT },
         isDone: false,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
       include: {
         column: true,
         project: true,
         tags: { include: { tag: true } },
-        checklist: { orderBy: { position: 'asc' } },
+        checklist: { orderBy: { position: "asc" } },
       },
     });
 
@@ -67,7 +72,10 @@ export class ClarificationService {
   /**
    * Apply clarification decisions to a task
    */
-  async clarifyTask(taskId: string, input: ClarifyTaskDto): Promise<ClarificationResult> {
+  async clarifyTask(
+    taskId: string,
+    input: ClarifyTaskDto,
+  ): Promise<ClarificationResult> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
       include: { column: true, board: { include: { columns: true } } },
@@ -84,31 +92,31 @@ export class ClarificationService {
     if (!input.actionable) {
       // Non-actionable: route to Someday/Maybe, Archive, or delete
       switch (input.nonActionableDestination) {
-        case 'archive':
+        case "archive":
           targetColumnType = ColumnType.ARCHIVE;
-          decision = 'Not actionable - archived for reference';
+          decision = "Not actionable - archived for reference";
           break;
-        case 'delete':
+        case "delete":
           // Delete the task instead of moving
           await this.prisma.task.delete({ where: { id: taskId } });
           this.boardGateway.emitBoardUpdate(task.boardId, {
-            type: 'task.deleted',
+            type: "task.deleted",
             taskId,
             timestamp: new Date().toISOString(),
           });
           return {
-            task: { id: taskId, title: task.title, columnId: '' },
-            targetColumn: { id: '', name: 'Deleted', type: ColumnType.ARCHIVE },
-            decision: 'Not actionable - deleted',
+            task: { id: taskId, title: task.title, columnId: "" },
+            targetColumn: { id: "", name: "Deleted", type: ColumnType.ARCHIVE },
+            decision: "Not actionable - deleted",
           };
         default:
           targetColumnType = ColumnType.SOMEDAY;
-          decision = 'Not actionable - added to Someday/Maybe';
+          decision = "Not actionable - added to Someday/Maybe";
       }
     } else if (input.twoMinute) {
       // Actionable + less than 2 minutes = Done Immediately
       targetColumnType = ColumnType.DONE;
-      decision = 'Two-minute rule - completed immediately';
+      decision = "Two-minute rule - completed immediately";
     } else if (input.waitingFor) {
       // Waiting on someone
       targetColumnType = ColumnType.WAITING;
@@ -120,28 +128,38 @@ export class ClarificationService {
     } else {
       // Default to Clarify/Next Actions
       targetColumnType = ColumnType.CLARIFY;
-      decision = 'Added to Next Actions';
+      decision = "Added to Next Actions";
     }
 
     // Find the appropriate column
-    let targetColumn = task.board.columns.find((c) => c.type === targetColumnType);
+    let targetColumn = task.board.columns.find(
+      (c) => c.type === targetColumnType,
+    );
 
     // If no specific column found for context, try to find one that matches the context name
     if (!targetColumn && input.context) {
       targetColumn = task.board.columns.find(
-        (c) => c.type === ColumnType.CONTEXT && c.name.toLowerCase().includes(input.context!.toLowerCase()),
+        (c) =>
+          c.type === ColumnType.CONTEXT &&
+          c.name.toLowerCase().includes(input.context!.toLowerCase()),
       );
     }
 
     // Fallback: use first column of the target type, or the clarify column
     if (!targetColumn) {
-      targetColumn = task.board.columns.find((c) => c.type === targetColumnType);
+      targetColumn = task.board.columns.find(
+        (c) => c.type === targetColumnType,
+      );
     }
     if (!targetColumn) {
-      targetColumn = task.board.columns.find((c) => c.type === ColumnType.CLARIFY);
+      targetColumn = task.board.columns.find(
+        (c) => c.type === ColumnType.CLARIFY,
+      );
     }
     if (!targetColumn) {
-      throw new BadRequestException(`No suitable column found for ${targetColumnType}`);
+      throw new BadRequestException(
+        `No suitable column found for ${targetColumnType}`,
+      );
     }
 
     const fromColumnId = task.columnId;
@@ -154,7 +172,10 @@ export class ClarificationService {
           columnId: targetColumn!.id,
           title: input.nextAction || task.title,
           context: input.context ?? task.context,
-          projectId: input.projectId === null ? null : (input.projectId ?? task.projectId),
+          projectId:
+            input.projectId === null
+              ? null
+              : (input.projectId ?? task.projectId),
           waitingFor: input.waitingFor ?? task.waitingFor,
           dueAt: input.dueAt ?? task.dueAt,
           needsBreakdown: input.needsBreakdown ?? task.needsBreakdown,
@@ -187,7 +208,7 @@ export class ClarificationService {
 
     // Emit WebSocket update
     this.boardGateway.emitBoardUpdate(task.boardId, {
-      type: 'task.clarified',
+      type: "task.clarified",
       taskId,
       fromColumnId,
       toColumnId: targetColumn.id,
@@ -230,7 +251,7 @@ export class ClarificationService {
           boardId,
           type: TaskEventType.MOVED,
           payload: {
-            path: ['clarification'],
+            path: ["clarification"],
             equals: true,
           },
           createdAt: { gte: today },

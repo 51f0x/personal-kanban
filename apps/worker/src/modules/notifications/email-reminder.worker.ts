@@ -1,21 +1,27 @@
-import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { InterContainerQueueService } from '../inter-container/inter-container-queue.service';
+import { randomBytes } from 'node:crypto';
 import {
-    GetUsersRequest,
-    GetUsersResponse,
+    Inject,
+    Injectable,
+    Logger,
+    type OnModuleDestroy,
+    type OnModuleInit,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+    CreateEmailActionTokenRequest,
     GetColumnsRequest,
     GetColumnsResponse,
+    GetUsersRequest,
+    GetUsersResponse,
     MoveTasksRequest,
-    CreateEmailActionTokenRequest,
 } from '@personal-kanban/shared';
-import { EmailService, type WorkPackageEmail, type EmailTask } from './email.service';
-import { TaskPrioritizerService } from './task-prioritizer.service';
 import { ColumnType } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { InterContainerQueueService } from '../inter-container/inter-container-queue.service';
+import { EmailService, EmailTask, WorkPackageEmail } from './email.service';
+import { TaskPrioritizerService } from './task-prioritizer.service';
 
 @Injectable()
-export class EmailReminderWorker implements OnModuleInit {
+export class EmailReminderWorker implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(EmailReminderWorker.name);
     private interval?: NodeJS.Timeout;
     private readonly enabled: boolean;
@@ -69,6 +75,13 @@ export class EmailReminderWorker implements OnModuleInit {
         );
     }
 
+    async onModuleDestroy() {
+        if (this.interval) {
+            clearInterval(this.interval);
+            this.logger.log('Email reminder worker stopped');
+        }
+    }
+
     /**
      * Send email reminders to all users with prioritized work packages
      */
@@ -91,9 +104,7 @@ export class EmailReminderWorker implements OnModuleInit {
 
             const validUsers = response.users;
 
-            this.logger.log(
-                `Found ${validUsers.length} users with valid email addresses`,
-            );
+            this.logger.log(`Found ${validUsers.length} users with valid email addresses`);
 
             let successCount = 0;
             let errorCount = 0;
@@ -292,10 +303,9 @@ export class EmailReminderWorker implements OnModuleInit {
             action,
         };
 
-        const response = (await this.queueService.request(
-            'api-requests',
-            request,
-        )) as { token: string };
+        const response = (await this.queueService.request('api-requests', request)) as {
+            token: string;
+        };
 
         return response.token;
     }

@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@personal-kanban/shared';
-import { TaskService } from './task.service';
-import { TagService } from '../tags/tag.service';
-import { BoardGateway } from '../realtime/board.gateway';
-import { ApplyHintDto } from './dto/apply-hint.input';
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "@personal-kanban/shared";
+
+import { BoardGateway } from "../realtime/board.gateway";
+import { TagService } from "../tags/tag.service";
+import { ApplyHintDto } from "./dto/apply-hint.input";
+import { TaskService } from "./task.service";
 
 @Injectable()
 export class HintsService {
@@ -32,9 +33,9 @@ export class HintsService {
     return this.prisma.hint.findMany({
       where: { taskId },
       orderBy: [
-        { applied: 'asc' }, // Unapplied hints first
-        { confidence: 'desc' }, // Higher confidence first
-        { createdAt: 'desc' }, // Newer first
+        { applied: "asc" }, // Unapplied hints first
+        { confidence: "desc" }, // Higher confidence first
+        { createdAt: "desc" }, // Newer first
       ],
     });
   }
@@ -69,7 +70,7 @@ export class HintsService {
     }
 
     if (hint.applied) {
-      return { message: 'Hint already applied', hint };
+      return { message: "Hint already applied", hint };
     }
 
     // Apply the hint based on its type
@@ -84,40 +85,44 @@ export class HintsService {
       const updates: Record<string, unknown> = {};
 
       switch (hint.hintType) {
-        case 'title':
+        case "title":
           if (hint.content) {
             updates.title = hint.content;
           }
           break;
 
-        case 'description':
+        case "description":
           if (hint.content) {
-            const currentDescription = hint.task.description || '';
+            const currentDescription = hint.task.description || "";
             updates.description = currentDescription
               ? `${currentDescription}\n\n${hint.content}`
               : hint.content;
           }
           break;
 
-        case 'context':
+        case "context":
           if (hint.content) {
             updates.context = hint.content;
           }
           break;
 
-        case 'tags':
-          if (hint.data && typeof hint.data === 'object' && 'tags' in hint.data) {
+        case "tags":
+          if (
+            hint.data &&
+            typeof hint.data === "object" &&
+            "tags" in hint.data
+          ) {
             const tagNames = (hint.data as { tags?: string[] }).tags || [];
             // Find or create tags and link them to the task
             if (tagNames.length > 0) {
               const tagIds: string[] = [];
-              
+
               for (const tagName of tagNames) {
                 // Try to find existing tag by name
                 const existingTag = await tx.tag.findFirst({
                   where: {
                     boardId: hint.task.boardId,
-                    name: { equals: tagName, mode: 'insensitive' },
+                    name: { equals: tagName, mode: "insensitive" },
                   },
                 });
 
@@ -130,7 +135,7 @@ export class HintsService {
                     data: {
                       boardId: hint.task.boardId,
                       name: tagName,
-                      color: '#94a3b8',
+                      color: "#94a3b8",
                     },
                   });
                   tagId = newTag.id;
@@ -159,9 +164,15 @@ export class HintsService {
           }
           break;
 
-        case 'actions':
-          if (hint.data && typeof hint.data === 'object' && 'actions' in hint.data) {
-            const actions = (hint.data as { actions?: Array<{ description: string }> }).actions || [];
+        case "actions":
+          if (
+            hint.data &&
+            typeof hint.data === "object" &&
+            "actions" in hint.data
+          ) {
+            const actions =
+              (hint.data as { actions?: Array<{ description: string }> })
+                .actions || [];
             // Add checklist items for actions
             if (actions.length > 0) {
               const existingCount = await tx.checklistItem.count({
@@ -180,22 +191,22 @@ export class HintsService {
           }
           break;
 
-        case 'summary':
+        case "summary":
           if (hint.content) {
-            const currentDescription = hint.task.description || '';
+            const currentDescription = hint.task.description || "";
             updates.description = currentDescription
               ? `${currentDescription}\n\n[Summary]\n${hint.content}`
               : `[Summary]\n${hint.content}`;
           }
           break;
 
-        case 'priority':
+        case "priority":
           if (hint.content) {
             // Map priority string to enum value
-            const priorityMap: Record<string, 'LOW' | 'MEDIUM' | 'HIGH'> = {
-              low: 'LOW',
-              medium: 'MEDIUM',
-              high: 'HIGH',
+            const priorityMap: Record<string, "LOW" | "MEDIUM" | "HIGH"> = {
+              low: "LOW",
+              medium: "MEDIUM",
+              high: "HIGH",
             };
             const priorityValue = priorityMap[hint.content.toLowerCase()];
             if (priorityValue) {
@@ -206,7 +217,7 @@ export class HintsService {
           }
           break;
 
-        case 'duration':
+        case "duration":
           if (hint.content) {
             updates.duration = hint.content;
           }
@@ -227,7 +238,7 @@ export class HintsService {
 
     // Emit WebSocket update
     this.boardGateway.emitBoardUpdate(hint.task.boardId, {
-      type: 'task.updated',
+      type: "task.updated",
       taskId: hint.taskId,
       hintApplied: id,
       timestamp: new Date().toISOString(),
@@ -238,7 +249,7 @@ export class HintsService {
     });
 
     this.logger.log(`Applied hint ${id} to task ${hint.taskId}`);
-    return { message: 'Hint applied successfully', hint: updatedHint };
+    return { message: "Hint applied successfully", hint: updatedHint };
   }
 
   /**
@@ -284,4 +295,3 @@ export class HintsService {
     return { success: true };
   }
 }
-

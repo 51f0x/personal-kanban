@@ -3,7 +3,7 @@
  * Handles markdown-wrapped JSON and provides fallback extraction
  * Framework-agnostic version (uses Joi but makes logger optional)
  */
-import * as Joi from 'joi';
+import type * as Joi from 'joi';
 
 export interface JsonParserLogger {
     warn?: (message: string, ...args: unknown[]) => void;
