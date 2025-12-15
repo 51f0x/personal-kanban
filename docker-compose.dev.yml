@@ -83,50 +83,6 @@ services:
       retries: 3
       start_period: 40s
 
-  api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.api
-    environment:
-      NODE_ENV: development
-      PORT: 3000
-      DATABASE_URL: postgresql://kanban_api:kanban_api@postgres-api:5432/kanban_api
-      REDIS_URL: redis://redis:6379
-      LLM_ENDPOINT: http://ollama:11434
-      LLM_MODEL: llama3.2:1b
-    depends_on:
-      postgres-api:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      ollama:
-        condition: service_healthy
-    ports:
-      - "3000:3000"
-
-  worker:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
-    environment:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://kanban_worker:kanban_worker@postgres-worker:5432/kanban_worker
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      postgres-worker:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
-  web:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-    depends_on:
-      - api
-    ports:
-      - "4173:80"
-
 volumes:
   pg_api_data:
   pg_worker_data:

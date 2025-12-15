@@ -2,7 +2,17 @@
 ARG NODE_VERSION=20
 FROM node:${NODE_VERSION}-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache openssl && \
+RUN apk add --no-cache \
+    openssl \
+    firefox \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    ttf-dejavu \
+    font-noto \
+    dbus && \
     corepack enable
 ENV PNPM_HOME="/home/node/.local/share/pnpm" \
     PATH="$PNPM_HOME:$PATH"
@@ -16,11 +26,22 @@ RUN pnpm install --frozen-lockfile && \
 
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl && \
+RUN apk add --no-cache \
+    openssl \
+    firefox \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    ttf-dejavu \
+    font-noto \
+    dbus && \
     corepack enable
 ENV NODE_ENV=production \
     PNPM_HOME="/home/node/.local/share/pnpm" \
-    PATH="$PNPM_HOME:$PATH"
+    PATH="$PNPM_HOME:$PATH" \
+    FIREFOX_EXECUTABLE_PATH=/usr/bin/firefox
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY --from=base /app/apps/worker/dist ./apps/worker/dist
 COPY --from=base /app/packages ./packages

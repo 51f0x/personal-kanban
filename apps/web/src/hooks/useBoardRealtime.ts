@@ -1,38 +1,93 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { type Socket, io } from 'socket.io-client';
+import { useEffect, useMemo, useRef } from "react";
+import { type Socket, io } from "socket.io-client";
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:3000';
+const WS_URL = import.meta.env.VITE_WS_URL ?? "http://localhost:3000";
 
-export function useBoardRealtime(boardIds: string[], onUpdate: () => void) {
-    const idsKey = useMemo(() => [...boardIds].sort().join(','), [boardIds]);
-    const onUpdateRef = useRef(onUpdate);
+export interface AgentProgress {
+  stage: string;
+  progress: number;
+  message: string;
+  details?: Record<string, unknown>;
+  timestamp: string;
+}
 
-    // Keep the ref updated with the latest callback
-    useEffect(() => {
-        onUpdateRef.current = onUpdate;
-    }, [onUpdate]);
+export interface BoardUpdateEvent {
+  type: string;
+  taskId?: string;
+  boardId?: string;
+  progress?: AgentProgress;
+  processingTimeMs?: number;
+  successfulAgents?: number;
+  errors?: string[];
+  timestamp: string;
+}
 
-    useEffect(() => {
-        if (!boardIds.length) {
-            return;
-        }
+export interface UseBoardRealtimeCallbacks {
+  onUpdate?: () => void;
+  onAgentProgress?: (taskId: string, progress: AgentProgress) => void;
+  onAgentCompleted?: (
+    taskId: string,
+    data: {
+      processingTimeMs: number;
+      successfulAgents: number;
+      errors?: string[];
+    },
+  ) => void;
+}
 
-        const socket: Socket = io(`${WS_URL}/boards`, { transports: ['websocket'] });
-        const joinBoards = () => {
-            boardIds.forEach((boardId) => {
-                socket.emit('join', { boardId });
-            });
-        };
+export function useBoardRealtime(
+  boardIds: string[],
+  callbacks: UseBoardRealtimeCallbacks,
+) {
+  const idsKey = useMemo(() => [...boardIds].sort().join(","), [boardIds]);
+  const callbacksRef = useRef(callbacks);
 
-        socket.on('connect', joinBoards);
-        socket.on('board:update', () => {
-            onUpdateRef.current();
+  // Keep the ref updated with the latest callbacks
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
+  useEffect(() => {
+    if (!boardIds.length) {
+      return;
+    }
+
+    const socket: Socket = io(`${WS_URL}/boards`, {
+      transports: ["websocket"],
+    });
+    const joinBoards = () => {
+      boardIds.forEach((boardId) => {
+        socket.emit("join", { boardId });
+      });
+    };
+
+    socket.on("connect", joinBoards);
+    socket.on("board:update", (event: BoardUpdateEvent) => {
+      const cbs = callbacksRef.current;
+
+      // Handle specific event types
+      if (event.type === "agent.progress" && event.taskId && event.progress) {
+        cbs.onAgentProgress?.(event.taskId, event.progress);
+        // Also call general update callback
+        cbs.onUpdate?.();
+      } else if (event.type === "agent.completed" && event.taskId) {
+        cbs.onAgentCompleted?.(event.taskId, {
+          processingTimeMs: event.processingTimeMs ?? 0,
+          successfulAgents: event.successfulAgents ?? 0,
+          errors: event.errors,
         });
+        // Refresh board data to show updated task with hints
+        cbs.onUpdate?.();
+      } else {
+        // Handle other board update events (task.created, task.updated, etc.)
+        cbs.onUpdate?.();
+      }
+    });
 
-        joinBoards();
+    joinBoards();
 
-        return () => {
-            socket.disconnect();
-        };
-    }, [idsKey, boardIds]);
+    return () => {
+      socket.disconnect();
+    };
+  }, [boardIds]);
 }

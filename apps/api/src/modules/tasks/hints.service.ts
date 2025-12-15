@@ -57,9 +57,42 @@ export class HintsService {
   }
 
   /**
-   * Apply a hint - apply the hint's suggestion to the task
+   * Compare two hints to determine which is better
+   * Returns true if hintA is better than hintB
+   * Uses the same logic as worker's selectBestHints method
    */
-  async applyHint(id: string, dto: ApplyHintDto) {
+  private isHintBetter(
+    hintA: { agentId: string; confidence: number | null },
+    hintB: { agentId: string; confidence: number | null },
+  ): boolean {
+    // Agent priority for description hints (higher = better)
+    // task-assistant is the most comprehensive, so it takes priority
+    const agentPriority: Record<string, number> = {
+      "task-assistant-agent": 3,
+      "task-analyzer-agent": 2,
+      "content-summarizer-agent": 1,
+      "task-help-agent": 1,
+    };
+
+    const confidenceA = hintA.confidence ?? 0;
+    const confidenceB = hintB.confidence ?? 0;
+
+    // First compare by confidence
+    if (confidenceA !== confidenceB) {
+      return confidenceA > confidenceB;
+    }
+
+    // If confidence is equal, compare by agent priority
+    const priorityA = agentPriority[hintA.agentId] ?? 0;
+    const priorityB = agentPriority[hintB.agentId] ?? 0;
+    return priorityA > priorityB;
+  }
+
+  /**
+   * Apply a hint - apply the hint's suggestion to the task
+   * Prevents overriding better content by checking existing applied hints
+   */
+  async applyHint(id: string, _dto: ApplyHintDto) {
     const hint = await this.prisma.hint.findUnique({
       where: { id },
       include: { task: true },
@@ -71,6 +104,42 @@ export class HintsService {
 
     if (hint.applied) {
       return { message: "Hint already applied", hint };
+    }
+
+    // For description hints, check if there's already a better applied hint
+    if (hint.hintType === "description") {
+      const existingAppliedDescriptionHints = await this.prisma.hint.findMany({
+        where: {
+          taskId: hint.taskId,
+          hintType: "description",
+          applied: true,
+        },
+      });
+
+      // Check if any existing applied hint is better than the one we're trying to apply
+      for (const existingHint of existingAppliedDescriptionHints) {
+        if (
+          this.isHintBetter(
+            {
+              agentId: existingHint.agentId,
+              confidence: existingHint.confidence,
+            },
+            {
+              agentId: hint.agentId,
+              confidence: hint.confidence,
+            },
+          )
+        ) {
+          this.logger.warn(
+            `Not applying hint ${id}: existing applied hint ${existingHint.id} is better (confidence: ${existingHint.confidence}, agent: ${existingHint.agentId})`,
+          );
+          return {
+            message:
+              "A better description hint is already applied. Please dismiss the existing hint first if you want to apply this one.",
+            hint,
+          };
+        }
+      }
     }
 
     // Apply the hint based on its type
@@ -93,10 +162,10 @@ export class HintsService {
 
         case "description":
           if (hint.content) {
-            const currentDescription = hint.task.description || "";
-            updates.description = currentDescription
-              ? `${currentDescription}\n\n${hint.content}`
-              : hint.content;
+            // Description hints replace the description (not append)
+            // This ensures the best description hint is used, not concatenated
+            // Matching the behavior of the worker's applyHintToTask method
+            updates.description = hint.content;
           }
           break;
 

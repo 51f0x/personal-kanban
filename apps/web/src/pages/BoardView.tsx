@@ -38,7 +38,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBoardRealtime } from '@/hooks/useBoardRealtime';
+import { useBoardRealtime, type AgentProgress } from '@/hooks/useBoardRealtime';
 import { useTasks } from '@/hooks/useTasks';
 import { deleteBoard, fetchBoardById, fetchBoards, updateBoard } from '@/services/boards';
 import { createColumn, deleteColumn, updateColumn } from '@/services/columns';
@@ -93,7 +93,7 @@ import {
     Users,
     X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -769,7 +769,7 @@ interface CreateTaskDialogProps {
     onOpenChange: (open: boolean) => void;
     board: Board;
     columnId: string;
-    onSuccess: () => void;
+    onSuccess: (taskId?: string) => void;
 }
 
 function CreateTaskDialog({
@@ -796,7 +796,7 @@ function CreateTaskDialog({
 
         setLoading(true);
         try {
-            await createTask({
+            const newTask = await createTask({
                 boardId: board.id,
                 columnId,
                 ownerId: board.ownerId,
@@ -808,7 +808,7 @@ function CreateTaskDialog({
                 dueAt: dueAt || undefined,
             });
             toast.success('Task created successfully');
-            onSuccess();
+            onSuccess(newTask.id);
             onOpenChange(false);
             // Reset form
             setTitle('');
@@ -1275,8 +1275,8 @@ function TaskDetailDialog({
                                                 task.priority === 'HIGH'
                                                     ? 'destructive'
                                                     : task.priority === 'MEDIUM'
-                                                      ? 'default'
-                                                      : 'secondary'
+                                                        ? 'default'
+                                                        : 'secondary'
                                             }
                                         >
                                             {task.priority}
@@ -1326,7 +1326,7 @@ function TaskDetailDialog({
                                             <span
                                                 className={cn(
                                                     item.isDone &&
-                                                        'line-through text-muted-foreground',
+                                                    'line-through text-muted-foreground',
                                                 )}
                                             >
                                                 {item.title}
@@ -1358,9 +1358,11 @@ function TaskDetailDialog({
 interface DraggableTaskCardProps {
     task: Task;
     onTaskClick?: (task: Task) => void;
+    isProcessing?: boolean;
+    progress?: AgentProgress;
 }
 
-function DraggableTaskCard({ task, onTaskClick }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, onTaskClick, isProcessing = false, progress }: DraggableTaskCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: task.id,
     });
@@ -1411,17 +1413,37 @@ function DraggableTaskCard({ task, onTaskClick }: DraggableTaskCardProps) {
                 <div className="flex flex-col p-4 gap-3 w-full">
                     {/* Header: Priority badge and drag handle */}
                     <div className="flex items-start justify-between gap-2 w-full">
-                        <div
-                            className={cn(
-                                colors.bg,
-                                'inline-flex items-center justify-center px-2.5 py-1 rounded-full shrink-0',
-                            )}
-                        >
-                            <span
-                                className={cn('font-semibold text-xs leading-tight', colors.text)}
+                        <div className="flex items-center gap-2">
+                            <div
+                                className={cn(
+                                    colors.bg,
+                                    'inline-flex items-center justify-center px-2.5 py-1 rounded-full shrink-0',
+                                )}
                             >
-                                {priority}
-                            </span>
+                                <span
+                                    className={cn('font-semibold text-xs leading-tight', colors.text)}
+                                >
+                                    {priority}
+                                </span>
+                            </div>
+                            {isProcessing && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-indigo-50 border border-indigo-200">
+                                    <Loader2 className="size-3 text-indigo-600 animate-spin" />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-medium text-indigo-600">
+                                            {progress?.message || 'Processing...'}
+                                        </span>
+                                        {progress && (
+                                            <div className="w-full bg-indigo-200 rounded-full h-1 mt-1">
+                                                <div
+                                                    className="bg-indigo-600 h-1 rounded-full transition-all duration-300"
+                                                    style={{ width: `${progress.progress}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <button
                             {...listeners}
@@ -1547,6 +1569,8 @@ interface KanbanColumnProps {
     onTaskClick?: (task: Task) => void;
     onEditColumn?: (column: Column) => void;
     onDeleteColumn?: (column: Column) => void;
+    processingTaskIds?: Set<string>;
+    taskProgress?: Map<string, AgentProgress>;
 }
 
 function KanbanColumn({
@@ -1556,6 +1580,8 @@ function KanbanColumn({
     onTaskClick,
     onEditColumn,
     onDeleteColumn,
+    processingTaskIds = new Set(),
+    taskProgress = new Map(),
 }: KanbanColumnProps) {
     const taskCount = tasks.length;
     const wipLimit = column.wipLimit ?? null;
@@ -1646,6 +1672,8 @@ function KanbanColumn({
                                     key={task.id}
                                     task={task}
                                     onTaskClick={onTaskClick}
+                                    isProcessing={processingTaskIds.has(task.id)}
+                                    progress={taskProgress?.get(task.id)}
                                 />
                             ))
                         )}
@@ -1682,7 +1710,12 @@ export function BoardView() {
     const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
     const [showTaskDialog, setShowTaskDialog] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const selectedTaskIdRef = useRef<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
+    // Track tasks that are being processed (waiting for hints)
+    const [processingTaskIds, setProcessingTaskIds] = useState<Set<string>>(new Set());
+    // Track agent progress for each task
+    const [taskProgress, setTaskProgress] = useState<Map<string, AgentProgress>>(new Map());
     const [showSearchDialog, setShowSearchDialog] = useState(false);
     const [selectedContexts, setSelectedContexts] = useState<Set<TaskContext>>(new Set());
     const [showShareDialog, setShowShareDialog] = useState(false);
@@ -1798,9 +1831,8 @@ export function BoardView() {
     }, []);
 
     // Real-time updates
-    useBoardRealtime(
-        boardId ? [boardId] : [],
-        useCallback(() => {
+    useBoardRealtime(boardId ? [boardId] : [], {
+        onUpdate: useCallback(() => {
             refreshTasks();
             if (boardId) {
                 fetchBoardById(boardId)
@@ -1814,7 +1846,90 @@ export function BoardView() {
                     .catch(console.error);
             }
         }, [boardId, refreshTasks]),
-    );
+        onAgentProgress: useCallback((taskId: string, progress: AgentProgress) => {
+            // Update progress state
+            setTaskProgress((prev) => {
+                const next = new Map(prev);
+                next.set(taskId, progress);
+                return next;
+            });
+            // Add to processing set if not already there
+            setProcessingTaskIds((prev) => {
+                if (prev.has(taskId)) return prev;
+                const next = new Set(prev);
+                next.add(taskId);
+                return next;
+            });
+            // Show toast for important stages
+            if (progress.stage === 'completed') {
+                toast.success('Agent processing completed for task');
+            } else if (progress.stage === 'error') {
+                toast.error(`Agent processing error: ${progress.message}`);
+            }
+        }, []),
+        onAgentCompleted: useCallback(
+            (taskId: string, data: { processingTimeMs: number; successfulAgents: number; errors?: string[] }) => {
+                // Remove from processing set
+                setProcessingTaskIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(taskId);
+                    return next;
+                });
+                // Clear progress
+                setTaskProgress((prev) => {
+                    const next = new Map(prev);
+                    next.delete(taskId);
+                    return next;
+                });
+                // Refresh tasks to get updated data with hints
+                refreshTasks();
+                // Update selected task if it's the one that was processed
+                if (selectedTask?.id === taskId) {
+                    refreshTasks().then(() => {
+                        // Task will be updated in the useEffect below
+                    });
+                }
+                // Show success message
+                const timeSeconds = (data.processingTimeMs / 1000).toFixed(1);
+                toast.success(
+                    `Processing complete! ${data.successfulAgents} agent(s) processed in ${timeSeconds}s`,
+                );
+            },
+            [selectedTask?.id, refreshTasks],
+        ),
+    });
+
+    // Update selectedTask when tasks are refreshed (e.g., after hint is applied)
+    useEffect(() => {
+        const taskId = selectedTaskIdRef.current;
+        if (taskId && tasks && tasks.length > 0) {
+            const updatedTask = tasks.find((t) => t.id === taskId);
+            if (updatedTask) {
+                setSelectedTask(updatedTask);
+            }
+        }
+    }, [tasks]);
+
+    // Keep ref in sync with selectedTask
+    useEffect(() => {
+        selectedTaskIdRef.current = selectedTask?.id ?? null;
+    }, [selectedTask]);
+
+    // Check for hints and remove from processing set when hints arrive
+    useEffect(() => {
+        if (tasks && tasks.length > 0 && processingTaskIds.size > 0) {
+            setProcessingTaskIds((prev) => {
+                const next = new Set(prev);
+                tasks.forEach((task) => {
+                    // If task has hints, remove from processing set
+                    if (task.hints && task.hints.length > 0 && next.has(task.id)) {
+                        next.delete(task.id);
+                    }
+                });
+                return next;
+            });
+        }
+    }, [tasks, processingTaskIds.size]);
 
     // Filter and sort tasks based on activeTab
     const filteredAndSortedTasks = useMemo(() => {
@@ -2234,6 +2349,9 @@ export function BoardView() {
                 setShowCreateTaskDialog={setShowCreateTaskDialog}
                 selectedColumnId={selectedColumnId}
                 refreshTasks={refreshTasks}
+                processingTaskIds={processingTaskIds}
+                setProcessingTaskIds={setProcessingTaskIds}
+                taskProgress={taskProgress}
                 showTaskDialog={showTaskDialog}
                 setShowTaskDialog={setShowTaskDialog}
                 selectedTask={selectedTask}
@@ -2292,6 +2410,9 @@ function BoardViewContent({
     setShowCreateTaskDialog,
     selectedColumnId,
     refreshTasks,
+    processingTaskIds,
+    setProcessingTaskIds,
+    taskProgress,
     showTaskDialog,
     setShowTaskDialog,
     selectedTask,
@@ -2344,6 +2465,9 @@ function BoardViewContent({
     setShowCreateTaskDialog: (open: boolean) => void;
     selectedColumnId: string | null;
     refreshTasks: () => void;
+    processingTaskIds: Set<string>;
+    setProcessingTaskIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+    taskProgress: Map<string, AgentProgress>;
     showTaskDialog: boolean;
     setShowTaskDialog: (open: boolean) => void;
     selectedTask: Task | null;
@@ -2473,10 +2597,10 @@ function BoardViewContent({
                                                 tab === 'Someday' ||
                                                 tab === 'Waiting' ||
                                                 tab === 'Projects') && (
-                                                <Badge variant="secondary" className="text-xs">
-                                                    {filteredAndSortedTasks.length}
-                                                </Badge>
-                                            )}
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {filteredAndSortedTasks.length}
+                                                    </Badge>
+                                                )}
                                             {tab === 'Analytics' && (
                                                 <Badge variant="secondary" className="text-xs">
                                                     📊
@@ -2556,12 +2680,14 @@ function BoardViewContent({
                                                     onTaskClick={handleTaskClick}
                                                     onEditColumn={onEditColumn}
                                                     onDeleteColumn={onDeleteColumn}
+                                                    processingTaskIds={processingTaskIds}
+                                                    taskProgress={taskProgress}
                                                 />
                                             );
                                         })}
                                     </div>
                                     <DragOverlay>
-                                        {activeTask && <DraggableTaskCard task={activeTask} />}
+                                        {activeTask && <DraggableTaskCard task={activeTask} isProcessing={false} />}
                                     </DragOverlay>
                                 </DndContext>
                             )}
@@ -2577,7 +2703,17 @@ function BoardViewContent({
                     onOpenChange={setShowCreateTaskDialog}
                     board={board}
                     columnId={selectedColumnId}
-                    onSuccess={refreshTasks}
+                    onSuccess={(taskId) => {
+                        // Mark task as processing (waiting for hints)
+                        if (taskId) {
+                            setProcessingTaskIds((prev) => {
+                                const next = new Set(prev);
+                                next.add(taskId);
+                                return next;
+                            });
+                        }
+                        refreshTasks();
+                    }}
                 />
             )}
 

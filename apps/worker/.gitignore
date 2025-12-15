@@ -1,0 +1,24 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+.tmp/
+.DS_Store
+.idea/
+.vscode/
+logs/
+*.log
+.pnpm-store/
+
+# TypeScript build artifacts in source directories
+**/src/**/*.js
+**/src/**/*.js.map
+**/src/**/*.d.ts.map
+
+# Vite build artifacts
+vite.config.js
+vite.config.js.map
+vite.config.d.ts
+*.tsbuildinfo

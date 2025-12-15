@@ -17,11 +17,24 @@
     "containerUser": "vscode",
     "remoteUser": "vscode",
     "updateContentCommand": "corepack enable && corepack prepare pnpm@9.11.0 --activate",
-    "postCreateCommand": "sudo chown root:docker /var/run/docker.sock || true && sudo chmod 666 /var/run/docker.sock || true && pnpm install",
+    "postCreateCommand": "sudo chown root:docker /var/run/docker.sock || true && sudo chmod 666 /var/run/docker.sock || true && pnpm install && (cd apps/worker && pnpm exec playwright install chromium || true)",
     "initializeCommand": "docker network create dev_network --driver bridge || true",
-    "mounts": ["source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"],
-    "runArgs": ["--privileged", "--add-host=host.docker.internal:host-gateway"],
-    "forwardPorts": [8081, 3000, 9090, 5432, 6379, 1125, 9000],
+    "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    ],
+    "runArgs": [
+        "--privileged",
+        "--add-host=host.docker.internal:host-gateway"
+    ],
+    "forwardPorts": [
+        8081,
+        3000,
+        9090,
+        5432,
+        6379,
+        1125,
+        9000
+    ],
     "portsAttributes": {
         "3000": {
             "label": "Web server",
@@ -45,6 +58,10 @@
         },
         "9000": {
             "label": "Minio",
+            "onAutoForward": "notify"
+        },
+        "8001": {
+            "label": "Redis Insight",
             "onAutoForward": "notify"
         }
     },

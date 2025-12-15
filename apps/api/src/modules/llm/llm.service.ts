@@ -49,7 +49,7 @@ export class LlmService {
       "LLM_ENDPOINT",
       "http://localhost:11434",
     );
-    this.model = this.config.get<string>("LLM_MODEL", "granite4:1b");
+    this.model = this.config.get<string>("LLM_MODEL", "gemma3:1b");
     this.llmTimeoutMs = this.config.get<number>("LLM_TIMEOUT_MS", 120000);
     this.maxRetries = this.config.get<number>("LLM_MAX_RETRIES", 2);
     this.ollama = new Ollama({ host: endpoint });
@@ -182,7 +182,7 @@ export class LlmService {
 
 {
   "title": string,
-  "context": "EMAIL" | "MEETING" | "PHONE" | "READ" | "WATCH" | "DESK" | "OTHER" | null,
+  "context": "EMAIL" | "MEETING" | "PHONE" | "READ" | "WATCH" | "DESK" | "OTHER" | "QUIET_TIME" | null,
   "waitingFor": string | null,
   "dueAt": ISO date string | null,
   "needsBreakdown": boolean,
