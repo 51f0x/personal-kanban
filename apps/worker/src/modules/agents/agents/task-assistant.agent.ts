@@ -3,6 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { parseAndValidateJson } from "@personal-kanban/shared";
 import { taskAssistantResponseSchema } from "../../../shared/schemas/agent-schemas";
 import { validateDescription } from "../../../shared/utils/input-validator.util";
+import {
+  CONFIDENCE_THRESHOLDS,
+  LLM_TEMPERATURE,
+} from "../core/agent-constants";
 import { ActionItem } from "./action-extractor.agent";
 import { BaseAgent } from "../core/base-agent";
 
@@ -90,21 +94,11 @@ export class TaskAssistantAgent extends BaseAgent {
         hasActions: !!suggestedActions && suggestedActions.length > 0,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.7, // Balanced creativity and focus
-            },
-          }),
-        "task assistant processing",
-      );
-
-      const responseText = response.response || "";
+      const responseText = await this.generateLlmResponse(prompt, {
+        context: "task assistant processing",
+        format: "json",
+        temperature: LLM_TEMPERATURE.CREATIVE, // Balanced creativity and focus
+      });
 
       // Log raw response for debugging if it seems problematic
       if (!responseText.trim() || responseText.trim().length < 10) {
@@ -163,12 +157,9 @@ export class TaskAssistantAgent extends BaseAgent {
             "Empty result generated",
             new Error("Final result is empty"),
           );
-          return {
-            agentId: this.agentId,
-            success: false,
-            confidence: 0,
-            error: "Generated result is empty",
-          };
+          return this.createErrorResult<TaskAssistantResult>(
+            "Generated result is empty",
+          );
         }
 
         // Validate description length if needed
@@ -182,7 +173,10 @@ export class TaskAssistantAgent extends BaseAgent {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: data.qualityCheck?.completeness || data.confidence || 0.7,
+          confidence:
+            data.qualityCheck?.completeness ||
+            data.confidence ||
+            CONFIDENCE_THRESHOLDS.HIGH,
           clarificationQuestions: data.clarification?.questions || [],
           needsClarification: data.clarification?.needsClarification || false,
           structure: data.structure
@@ -249,27 +243,23 @@ export class TaskAssistantAgent extends BaseAgent {
       );
 
       // Return error but don't crash - this is Phase 3, so other phases succeeded
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: `JSON parsing failed: ${errorMessage}. Response length: ${responseText.length} chars`,
-        metadata: {
-          rawResponsePreview: responseText,
-          rawResponseLength: responseText.length,
-          parseError: errorMessage,
-        },
-      };
+      return this.createErrorResult<TaskAssistantResult>(
+        `JSON parsing failed: ${errorMessage}. Response length: ${responseText.length} chars`,
+        {
+          metadata: {
+            rawResponsePreview: responseText,
+            rawResponseLength: responseText.length,
+            parseError: errorMessage,
+          },
+        } as Partial<TaskAssistantResult>,
+      );
     } catch (error) {
       this.logError("Error processing task with task assistant", error, {
         title: title,
       });
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return this.createErrorResult<TaskAssistantResult>(
+        this.extractErrorMessage(error),
+      );
     }
   }
 
@@ -283,28 +273,18 @@ export class TaskAssistantAgent extends BaseAgent {
     contentSummary?: string,
     suggestedActions?: ActionItem[],
   ): string {
-    let taskText = `Task: ${title}`;
-    if (description) {
-      taskText += `\n\nDescription:\n${description}`;
-    }
+    const taskText = `Task: ${title}${description ? `\n\nDescription:\n${description}` : ""}`;
 
-    let contentText = "";
-    if (webContent) {
-      contentText = `\n\nContent from URL:\n${webContent}`;
-    } else if (contentSummary) {
-      contentText = `\n\nContent Summary:\n${contentSummary}`;
-    }
+    const contentText = webContent
+      ? `\n\nContent from URL:\n${webContent}`
+      : contentSummary
+        ? `\n\nContent Summary:\n${contentSummary}`
+        : "";
 
-    let actionsText = "";
-    if (suggestedActions && suggestedActions.length > 0) {
-      actionsText = "\n\n[Suggested Actions]\n";
-      actionsText += suggestedActions
-        .map(
-          (action, idx) =>
-            `${idx + 1}. ${action.description}${action.priority ? ` (Priority: ${action.priority})` : ""}`,
-        )
-        .join("\n");
-    }
+    const actionsText = this.buildActionsText(
+      suggestedActions || [],
+      "Suggested Actions",
+    );
 
     return `Du bist mein persönlicher Task-Assistent.
 

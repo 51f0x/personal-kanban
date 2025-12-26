@@ -31,6 +31,7 @@ import { TaskService } from "./task.service";
 import { CreateTaskDto } from "./dto/create-task.input";
 import { MoveTaskDto } from "./dto/move-task.input";
 import { UpdateTaskDto } from "./dto/update-task.input";
+import { AssistantCaptureService } from "../assistant/assistant-capture.service";
 
 @ApiTags("tasks")
 @Controller()
@@ -43,6 +44,7 @@ export class TaskController {
     private readonly deleteTaskUseCase: DeleteTaskUseCase,
     private readonly getStaleTasksUseCase: GetStaleTasksUseCase,
     private readonly markStaleUseCase: MarkStaleUseCase,
+    private readonly assistantCaptureService: AssistantCaptureService,
   ) {}
 
   @Get("tasks/:id")
@@ -95,8 +97,23 @@ export class TaskController {
   @ApiBody({ type: CreateTaskDto })
   @ApiResponse({ status: 201, description: "Task created successfully" })
   @ApiResponse({ status: 400, description: "Invalid input" })
-  createTask(@Body() dto: CreateTaskDto) {
-    return this.createTaskUseCase.execute(dto);
+  async createTask(@Body() dto: CreateTaskDto) {
+    const task = await this.createTaskUseCase.execute(dto);
+
+    // Trigger assistant processing in background (fire-and-forget)
+    // This routes newly created tasks to the assistant pipeline in the worker
+    this.assistantCaptureService
+      .processTaskWithAssistantAsync(task.id, task.boardId)
+      .catch((error) => {
+        // Log but don't fail task creation
+        // eslint-disable-next-line no-console
+        console.error(
+          `Failed to start assistant processing for task ${task.id}:`,
+          error,
+        );
+      });
+
+    return task;
   }
 
   @Patch("tasks/:id")

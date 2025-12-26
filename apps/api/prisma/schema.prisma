@@ -1,0 +1,336 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/.prisma/client-api"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Use API_DATABASE_URL for API schema, fallback to DATABASE_URL
+  // dotenv-cli loads ../../.env which contains API_DATABASE_URL
+  url      = env("API_DATABASE_URL")
+  schemas  = ["api"]
+}
+
+enum ColumnType {
+  INPUT
+  CLARIFY
+  CONTEXT
+  WAITING
+  SOMEDAY
+  DONE
+  ARCHIVE
+
+  @@schema("api")
+}
+
+enum TaskContext {
+  EMAIL
+  MEETING
+  PHONE
+  READ
+  WATCH
+  DESK
+  OTHER
+
+  @@schema("api")
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@schema("api")
+}
+
+enum TaskEventType {
+  CREATED
+  UPDATED
+  MOVED
+  COMPLETED
+  STALE
+  RULE_TRIGGERED
+
+  @@schema("api")
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  email              String              @unique
+  name               String?
+  passwordHash       String?             // Argon2 hashed password
+  timezone           String?             @default("UTC")
+  defaultBoardId     String?             @db.Uuid
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  boards             Board[]
+  tasks              Task[]
+  projects           Project[]
+  rules              Rule[]
+  recurringTemplates RecurringTemplate[]
+  defaultBoard       Board?              @relation("UserDefaultBoard", fields: [defaultBoardId], references: [id], onDelete: SetNull)
+  emailActionTokens  EmailActionToken[]
+
+  @@schema("api")
+  @@index([defaultBoardId])
+}
+
+model Board {
+  id          String              @id @default(uuid()) @db.Uuid
+  ownerId     String              @db.Uuid
+  name        String
+  description String?
+  config      Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  owner       User                @relation(fields: [ownerId], references: [id])
+  defaultFor  User[]              @relation("UserDefaultBoard")
+  columns     Column[]
+  projects    Project[]
+  tasks       Task[]
+  tags        Tag[]
+  rules       Rule[]
+  templates   RecurringTemplate[]
+  events      TaskEvent[]
+
+  @@schema("api")
+  @@index([ownerId])
+}
+
+model Column {
+  id        String     @id @default(uuid()) @db.Uuid
+  boardId   String     @db.Uuid
+  name      String
+  type      ColumnType @default(INPUT)
+  wipLimit  Int?
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  board     Board      @relation(fields: [boardId], references: [id])
+  tasks     Task[]
+
+  @@schema("api")
+  @@index([boardId])
+}
+
+model Project {
+  id             String      @id @default(uuid()) @db.Uuid
+  boardId        String      @db.Uuid
+  ownerId        String      @db.Uuid
+  name           String
+  description    String?
+  desiredOutcome String?
+  status         String?     @default("active")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  board          Board       @relation(fields: [boardId], references: [id])
+  owner          User        @relation(fields: [ownerId], references: [id])
+  tasks          Task[]
+  localBrain     LocalBrain?
+
+  @@schema("api")
+  @@index([boardId])
+  @@index([ownerId])
+}
+
+model Task {
+  id             String          @id @default(uuid()) @db.Uuid
+  boardId        String          @db.Uuid
+  columnId       String          @db.Uuid
+  projectId      String?         @db.Uuid
+  ownerId        String          @db.Uuid
+  title          String
+  description    String?
+  context        TaskContext?
+  waitingFor     String?
+  dueAt          DateTime?
+  priority       TaskPriority?
+  duration       String?
+  needsBreakdown Boolean         @default(false)
+  metadata       Json?
+  isDone         Boolean         @default(false)
+  position       Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  completedAt    DateTime?
+  lastMovedAt    DateTime        @default(now())
+  stale          Boolean         @default(false)
+  board          Board           @relation(fields: [boardId], references: [id])
+  column         Column          @relation(fields: [columnId], references: [id])
+  project        Project?        @relation(fields: [projectId], references: [id])
+  owner          User            @relation(fields: [ownerId], references: [id])
+  tags           TaskTag[]
+  checklist      ChecklistItem[]
+  events         TaskEvent[]
+  hints          Hint[]
+  emailActionTokens EmailActionToken[]
+
+  @@schema("api")
+  @@index([boardId])
+  @@index([columnId])
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([stale])
+  @@index([columnId, position])
+}
+
+model ChecklistItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid
+  title     String
+  isDone    Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id])
+
+  @@schema("api")
+  @@index([taskId])
+}
+
+model Tag {
+  id        String    @id @default(uuid()) @db.Uuid
+  boardId   String    @db.Uuid
+  name      String
+  color     String?   @default("#94a3b8")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  board     Board     @relation(fields: [boardId], references: [id])
+  tasks     TaskTag[]
+
+  @@schema("api")
+  @@unique([boardId, name])
+}
+
+model TaskTag {
+  taskId String @db.Uuid
+  tagId  String @db.Uuid
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@schema("api")
+  @@id([taskId, tagId])
+}
+
+model TaskEvent {
+  id           String        @id @default(uuid()) @db.Uuid
+  taskId       String        @db.Uuid
+  boardId      String        @db.Uuid
+  type         TaskEventType
+  fromColumnId String?       @db.Uuid
+  toColumnId   String?       @db.Uuid
+  payload      Json?
+  triggeredBy  String?
+  createdAt    DateTime      @default(now())
+  task         Task          @relation(fields: [taskId], references: [id])
+  board        Board         @relation(fields: [boardId], references: [id])
+
+  @@schema("api")
+  @@index([boardId])
+  @@index([taskId])
+}
+
+model Rule {
+  id          String    @id @default(uuid()) @db.Uuid
+  boardId     String    @db.Uuid
+  ownerId     String    @db.Uuid
+  name        String
+  description String?
+  enabled     Boolean   @default(true)
+  priority    Int       @default(100)
+  trigger     Json
+  conditions  Json?
+  actions     Json
+  lastRunAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  board       Board     @relation(fields: [boardId], references: [id])
+  owner       User      @relation(fields: [ownerId], references: [id])
+
+  @@schema("api")
+  @@index([boardId])
+  @@index([ownerId])
+}
+
+model RecurringTemplate {
+  id          String    @id @default(uuid()) @db.Uuid
+  boardId     String    @db.Uuid
+  ownerId     String    @db.Uuid
+  name        String
+  description String?
+  payload     Json
+  rrule       String
+  timezone    String    @default("UTC")
+  nextRunAt   DateTime?
+  lastRunAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  board       Board     @relation(fields: [boardId], references: [id])
+  owner       User      @relation(fields: [ownerId], references: [id])
+
+  @@schema("api")
+  @@index([boardId])
+  @@index([ownerId])
+}
+
+model Hint {
+  id         String   @id @default(uuid()) @db.Uuid
+  taskId     String   @db.Uuid
+  agentId    String // e.g., "web-content-agent", "task-analyzer-agent"
+  hintType   String // e.g., "title", "description", "context", "tags", "summary", "actions"
+  title      String? // Optional title/label for the hint
+  content    String? // Main content of the hint
+  data       Json? // Structured data (e.g., tags array, actions array)
+  confidence Float? // Confidence score 0-1
+  applied    Boolean  @default(false) // Whether user has applied this hint
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@schema("api")
+  @@index([taskId])
+  @@index([agentId])
+  @@index([hintType])
+  @@index([applied])
+}
+
+model EmailActionToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique // Secure random token for email links
+  action    String   @default("complete") // Action type: "complete", "view", etc.
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("api")
+  @@index([token])
+  @@index([taskId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LocalBrain {
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @unique @db.Uuid
+  objective      String   @default("")
+  context        Json?    // LocalBrain context
+  constraints    Json?    // LocalBrain constraints
+  openQuestions  Json?    // Array of open questions
+  taskBacklog    Json?    // Array of tasks
+  researchPlan   Json?    // Research plan
+  sources        Json?    // Array of sources
+  decisions      Json?    // Array of decisions
+  risks          Json?    // Array of risks
+  deliverables   Json?    // Deliverables
+  history        Json?    // Array of history entries
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@schema("api")
+  @@index([projectId])
+}

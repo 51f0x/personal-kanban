@@ -3,9 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { parseAndValidateJson } from "@personal-kanban/shared";
 import { actionExtractionResponseSchema } from "../../../shared/schemas/agent-schemas";
 import {
-  validateDescription,
-  validateTitle,
-} from "../../../shared/utils/input-validator.util";
+  CONFIDENCE_THRESHOLDS,
+  CONTENT_LIMITS,
+  LLM_TEMPERATURE,
+} from "../core/agent-constants";
 import { BaseAgent } from "../core/base-agent";
 import { filterTrivialActions } from "../utils/action-filter.util";
 
@@ -63,18 +64,11 @@ export class ActionExtractorAgent extends BaseAgent {
     webContent?: string,
   ): Promise<ActionExtractionResult> {
     // Validate inputs
-    const titleValidation = validateTitle(title);
-    if (!titleValidation.valid) {
-      this.logError(
-        "Title validation failed",
-        new Error(titleValidation.error || "Invalid title"),
+    const inputValidation = this.validateTaskInputs(title, description);
+    if (!inputValidation.valid) {
+      return this.createErrorResult<ActionExtractionResult>(
+        inputValidation.error || "Invalid input",
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: titleValidation.error || "Invalid title",
-      };
     }
 
     if (!contentSummary && !description) {
@@ -82,7 +76,7 @@ export class ActionExtractorAgent extends BaseAgent {
       return {
         agentId: this.agentId,
         success: true,
-        confidence: 0.3,
+        confidence: CONFIDENCE_THRESHOLDS.LOW,
         actions: [
           {
             description: title,
@@ -94,22 +88,6 @@ export class ActionExtractorAgent extends BaseAgent {
           extractedFrom: "title-only",
         },
       };
-    }
-
-    if (description) {
-      const descValidation = validateDescription(description);
-      if (!descValidation.valid) {
-        this.logError(
-          "Description validation failed",
-          new Error(descValidation.error || "Invalid description"),
-        );
-        return {
-          agentId: this.agentId,
-          success: false,
-          confidence: 0,
-          error: descValidation.error || "Invalid description",
-        };
-      }
     }
 
     try {
@@ -128,21 +106,11 @@ export class ActionExtractorAgent extends BaseAgent {
         hasContentSummary: !!contentSummary,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.5,
-            },
-          }),
-        "action extraction",
-      );
-
-      const extractionText = response.response || "";
+      const extractionText = await this.generateLlmResponse(prompt, {
+        context: "action extraction",
+        format: "json",
+        temperature: LLM_TEMPERATURE.MEDIUM,
+      });
 
       // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
@@ -182,7 +150,10 @@ export class ActionExtractorAgent extends BaseAgent {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: filteredActions.length > 0 ? 0.8 : 0.5,
+          confidence:
+            filteredActions.length > 0
+              ? CONFIDENCE_THRESHOLDS.VERY_HIGH
+              : CONFIDENCE_THRESHOLDS.MEDIUM,
           actions: filteredActions.length > 0 ? filteredActions : undefined,
           totalActions,
           solutions: totalSolutions > 0 ? solutions : undefined,
@@ -204,22 +175,14 @@ export class ActionExtractorAgent extends BaseAgent {
         "Failed to parse action extraction result",
         new Error(errorMessage),
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: errorMessage,
-      };
+      return this.createErrorResult<ActionExtractionResult>(errorMessage);
     } catch (error) {
       this.logError("Error extracting actions", error, {
         title: title,
       });
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return this.createErrorResult<ActionExtractionResult>(
+        this.extractErrorMessage(error),
+      );
     }
   }
 
@@ -232,16 +195,10 @@ export class ActionExtractorAgent extends BaseAgent {
     contentSummary?: string,
     webContent?: string,
   ): string {
-    let content = title;
-    if (description) {
-      content += `\n\n${description}`;
-    }
-    if (contentSummary) {
-      content += `\n\n[Content Summary from URL]\n${contentSummary}`;
-    }
+    let content = this.buildContentString(title, description, contentSummary);
     if (webContent && webContent !== contentSummary) {
       // Include full web content if available and different from summary for richer context
-      content += `\n\n[Full Web Content Context]\n${webContent.substring(0, 5000)}`; // Limit to 5000 chars to avoid token limits
+      content += `\n\n[Full Web Content Context]\n${webContent.substring(0, CONTENT_LIMITS.WEB_CONTENT_MAX)}`;
     }
 
     return `You are a work preparation assistant. Your role is to help humans prepare to execute work by:

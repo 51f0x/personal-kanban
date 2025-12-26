@@ -42,4 +42,17 @@ export class ProjectService {
       include: { tasks: true },
     });
   }
+
+  async deleteProject(id: string) {
+    // First, remove projectId from all tasks that reference this project
+    await this.prisma.task.updateMany({
+      where: { projectId: id },
+      data: { projectId: null },
+    });
+
+    // Then delete the project
+    return this.prisma.project.delete({
+      where: { id },
+    });
+  }
 }

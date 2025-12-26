@@ -3,10 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { parseAndValidateJson } from "@personal-kanban/shared";
 import { TaskContext } from "@prisma/client";
 import { taskAnalysisResponseSchema } from "../../../shared/schemas/agent-schemas";
-import {
-  validateDescription,
-  validateTitle,
-} from "../../../shared/utils/input-validator.util";
+import { LLM_TEMPERATURE } from "../core/agent-constants";
 import { ActionItem } from "./action-extractor.agent";
 import { BaseAgent } from "../core/base-agent";
 
@@ -52,34 +49,11 @@ export class TaskAnalyzerAgent extends BaseAgent {
     suggestedActions?: ActionItem[],
   ): Promise<TaskAnalysisResult> {
     // Validate inputs
-    const titleValidation = validateTitle(title);
-    if (!titleValidation.valid) {
-      this.logError(
-        "Title validation failed",
-        new Error(titleValidation.error || "Invalid title"),
+    const inputValidation = this.validateTaskInputs(title, description);
+    if (!inputValidation.valid) {
+      return this.createErrorResult<TaskAnalysisResult>(
+        inputValidation.error || "Invalid input",
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: titleValidation.error || "Invalid title",
-      };
-    }
-
-    if (description) {
-      const descValidation = validateDescription(description);
-      if (!descValidation.valid) {
-        this.logError(
-          "Description validation failed",
-          new Error(descValidation.error || "Invalid description"),
-        );
-        return {
-          agentId: this.agentId,
-          success: false,
-          confidence: 0,
-          error: descValidation.error || "Invalid description",
-        };
-      }
     }
 
     try {
@@ -100,21 +74,11 @@ export class TaskAnalyzerAgent extends BaseAgent {
         actionsCount: suggestedActions?.length || 0,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.5, // Moderate temperature for balanced analysis
-            },
-          }),
-        "task analysis",
-      );
-
-      const analysisText = response.response || "";
+      const analysisText = await this.generateLlmResponse(prompt, {
+        context: "task analysis",
+        format: "json",
+        temperature: LLM_TEMPERATURE.MEDIUM, // Moderate temperature for balanced analysis
+      });
 
       // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
@@ -155,25 +119,18 @@ export class TaskAnalyzerAgent extends BaseAgent {
           rawResponse: analysisText,
         },
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: errorMessage,
+      return this.createErrorResult<TaskAnalysisResult>(errorMessage, {
         metadata: {
           rawResponse: analysisText,
         },
-      };
+      } as Partial<TaskAnalysisResult>);
     } catch (error) {
       this.logError("Error analyzing task", error, {
         title: title,
       });
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return this.createErrorResult<TaskAnalysisResult>(
+        this.extractErrorMessage(error),
+      );
     }
   }
 
@@ -186,26 +143,19 @@ export class TaskAnalyzerAgent extends BaseAgent {
     contentSummary?: string,
     suggestedActions?: ActionItem[],
   ): string {
-    let taskText = title;
-    if (description) {
-      taskText += `\n\n${description}`;
-    }
-    if (contentSummary) {
-      taskText += `\n\n[Content Summary from URL]\n${contentSummary}`;
-    }
-
-    let actionsText = "";
-    if (suggestedActions && suggestedActions.length > 0) {
-      actionsText = "\n\n[Suggested Actions to Guide Analysis]\n";
-      actionsText += suggestedActions
-        .map(
-          (action, idx) =>
-            `${idx + 1}. ${action.description}${action.priority ? ` (Priority: ${action.priority})` : ""}${action.estimatedDuration ? ` [Duration: ${action.estimatedDuration}]` : ""}`,
-        )
-        .join("\n");
-      actionsText +=
-        "\n\nUse these suggested actions to inform your analysis. Consider how these actions relate to the task context, priority, tags, and duration.";
-    }
+    const taskText = this.buildContentString(
+      title,
+      description,
+      contentSummary,
+    );
+    const actionsText = this.buildActionsText(
+      suggestedActions || [],
+      "Suggested Actions to Guide Analysis",
+    );
+    const actionsGuidance =
+      actionsText.length > 0
+        ? "\n\nUse these suggested actions to inform your analysis. Consider how these actions relate to the task context, priority, tags, and duration."
+        : "";
 
     return `You are a work preparation assistant. Your role is to PRE-ANALYZE tasks and prepare them for human execution. You help humans understand what work needs to be done and how to approach it effectively.
 
@@ -225,7 +175,7 @@ Analyze the following task and prepare a clear, actionable work description with
 }
 
 Task:
-${taskText}${actionsText}
+${taskText}${actionsText}${actionsGuidance}
 
 PREPARATION FOCUS - Help the human prepare to execute this work:
 1. **Title**: Create a clear, concise title that immediately communicates what work needs to be done

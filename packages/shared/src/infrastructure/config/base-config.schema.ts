@@ -99,12 +99,24 @@ export const apiConfigSchema = baseConfigSchema.keys({
 /**
  * Worker-specific configuration schema
  */
-export const workerConfigSchema = baseConfigSchema.keys({
-    API_URL: Joi.string().uri().default('http://localhost:3000'),
-    WEB_URL: Joi.string().uri().default('http://localhost:5173'),
+export const workerConfigSchema = baseConfigSchema
+    .keys({
+        // Worker database URL (preferred over DATABASE_URL)
+        WORKER_DATABASE_URL: Joi.string()
+            .optional()
+            .description('PostgreSQL connection string for worker (uses worker schema)'),
+        
+        // Make DATABASE_URL optional for worker (fallback if WORKER_DATABASE_URL not set)
+        DATABASE_URL: Joi.string()
+            .optional()
+            .description('PostgreSQL connection string (fallback if WORKER_DATABASE_URL not set)'),
+        
+        API_URL: Joi.string().uri().default('http://localhost:3000'),
+        WEB_URL: Joi.string().uri().default('http://localhost:5173'),
 
-    // Email reminder configuration
-    EMAIL_REMINDERS_ENABLED: Joi.string().valid('true', 'false').default('true'),
-    EMAIL_REMINDER_INTERVAL_HOURS: Joi.number().integer().min(1).max(168).default(24),
-    EMAIL_MAX_TASKS_PER_EMAIL: Joi.number().integer().min(1).max(50).default(10),
-});
+        // Email reminder configuration
+        EMAIL_REMINDERS_ENABLED: Joi.string().valid('true', 'false').default('true'),
+        EMAIL_REMINDER_INTERVAL_HOURS: Joi.number().integer().min(1).max(168).default(24),
+        EMAIL_MAX_TASKS_PER_EMAIL: Joi.number().integer().min(1).max(50).default(10),
+    })
+    .or('WORKER_DATABASE_URL', 'DATABASE_URL'); // At least one must be provided

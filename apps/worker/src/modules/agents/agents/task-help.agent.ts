@@ -81,21 +81,11 @@ export class TaskHelpAgent extends BaseAgent {
         webContentLength: webContent?.length || 0,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.7, // Slightly higher for creative but focused help
-            },
-          }),
-        "task help generation",
-      );
-
-      const helpText = response.response || "";
+      const helpText = await this.generateLlmResponse(prompt, {
+        context: "task help generation",
+        format: "json",
+        temperature: 0.7, // Slightly higher for creative but focused help
+      });
 
       // Parse and validate JSON
       const parseResult = parseAndValidateJson(

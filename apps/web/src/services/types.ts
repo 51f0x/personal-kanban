@@ -27,7 +27,15 @@ export interface Tag {
 
 export interface Project {
     id: string;
+    boardId: string;
+    ownerId: string;
     name: string;
+    description?: string | null;
+    desiredOutcome?: string | null;
+    status?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    tasks?: Array<{ id: string }>;
 }
 
 export interface ChecklistItem {

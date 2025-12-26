@@ -1,6 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import type { ImapFlow } from 'imapflow';
-import type { QuickTaskService } from '../../capture/quick-task.service';
+import type { QuickTaskService } from '../../capture-worker/quick-task.service';
 import { ImapPollerService } from '../imap.poller';
 
 describe('ImapPollerService', () => {

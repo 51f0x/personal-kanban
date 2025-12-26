@@ -1,35 +1,20 @@
 services:
-  postgres-api:
+  postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: kanban_api
-      POSTGRES_PASSWORD: kanban_api
-      POSTGRES_DB: kanban_api
+      POSTGRES_USER: kanban
+      POSTGRES_PASSWORD: kanban
+      POSTGRES_DB: kanban
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kanban_api"]
+      test: ["CMD-SHELL", "pg_isready -U kanban"]
       interval: 10s
       timeout: 5s
       retries: 5
     volumes:
-      - pg_api_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
+      - ./scripts/init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql
     ports:
       - "5432:5432"
-
-  postgres-worker:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: kanban_worker
-      POSTGRES_PASSWORD: kanban_worker
-      POSTGRES_DB: kanban_worker
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kanban_worker"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - pg_worker_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
 
   redis:
     image: redis:7-alpine
@@ -90,12 +75,12 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgresql://kanban_api:kanban_api@postgres-api:5432/kanban_api
+      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban?schema=api
       REDIS_URL: redis://redis:6379
       LLM_ENDPOINT: http://ollama:11434
       LLM_MODEL: llama3.2:1b
     depends_on:
-      postgres-api:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_started
@@ -110,10 +95,10 @@ services:
       dockerfile: docker/Dockerfile.worker
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://kanban_worker:kanban_worker@postgres-worker:5432/kanban_worker
+      DATABASE_URL: postgresql://kanban:kanban@postgres:5432/kanban?schema=worker
       REDIS_URL: redis://redis:6379
     depends_on:
-      postgres-worker:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_started
@@ -128,8 +113,7 @@ services:
       - "4173:80"
 
 volumes:
-  pg_api_data:
-  pg_worker_data:
+  pg_data:
   minio_data:
   ollama_data:
   redis_insight_data:

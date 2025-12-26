@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@personal-kanban/shared";
+import type { PrismaService } from "@personal-kanban/shared";
 import {
   AgentCompletedEvent,
   AgentProgressEvent,
@@ -188,7 +188,7 @@ export class AgentOrchestrator {
   private readonly logger = new Logger(AgentOrchestrator.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject("PrismaService") private readonly prisma: PrismaService,
     @Inject("IEventBus") private readonly eventBus: IEventBus,
     private readonly webContentAgent: WebContentAgent,
     private readonly contentSummarizerAgent: ContentSummarizerAgent,
@@ -203,9 +203,16 @@ export class AgentOrchestrator {
    * Process a task with multiple agents
    * Uses AI to determine which agents are relevant, then runs only selected agents
    * Creates hints from all successful agent results
+   * All task data must be provided - worker does not query database
    */
   async processTask(
     taskId: string,
+    boardId: string,
+    taskData: {
+      title: string;
+      description?: string;
+      metadata: Record<string, unknown>;
+    },
     options?: {
       forceReprocess?: boolean;
       skipWebContent?: boolean;
@@ -218,9 +225,12 @@ export class AgentOrchestrator {
     const progressHistory: AgentProcessingProgress[] = [];
 
     try {
-      // Phase 0: Initialize and fetch task
+      // Phase 0: Initialize with task data from Redis message
+      // Worker does not query database - all data comes from message
       const context = await this.initializeProcessing(
         taskId,
+        boardId,
+        taskData,
         errors,
         progressHistory,
         options?.onProgress,
@@ -320,33 +330,34 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Initialize processing by fetching task and setting up context
+   * Initialize processing with task data from Redis message
+   * Worker does not query database - all data comes from message
    */
   private async initializeProcessing(
     taskId: string,
+    boardId: string,
+    taskData: {
+      title: string;
+      description?: string;
+      metadata: Record<string, unknown>;
+    },
     errors: string[],
     progressHistory: AgentProcessingProgress[],
     _onProgress?: AgentProgressCallback,
   ): Promise<ProcessingContext> {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      select: {
-        id: true,
-        boardId: true,
-        title: true,
-        description: true,
-        metadata: true,
-      },
-    });
-
-    if (!task) {
-      throw new Error(`Task not found: ${taskId}`);
-    }
-
     const taskIdVO = TaskId.from(taskId);
-    const boardIdVO = BoardId.from(task.boardId);
-    const originalText = `${task.title}${task.description ? `\n\n${task.description}` : ""}`;
-    const metadata = (task.metadata || {}) as Record<string, unknown>;
+    const boardIdVO = BoardId.from(boardId);
+    const originalText = `${taskData.title}${taskData.description ? `\n\n${taskData.description}` : ""}`;
+    const metadata = taskData.metadata || {};
+
+    // Create task object structure for compatibility
+    const task: TaskData = {
+      id: taskId,
+      boardId,
+      title: taskData.title,
+      description: taskData.description || null,
+      metadata: metadata as Record<string, unknown>,
+    };
 
     return {
       taskId,

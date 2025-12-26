@@ -1,10 +1,10 @@
-import  { PrismaService } from "@personal-kanban/shared";
+import { PrismaService } from "@personal-kanban/shared";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { parseCaptureText } from "@personal-kanban/shared";
 
-import  { TaskService } from "../tasks/task.service";
-import  { AgentCaptureService } from "./agent-capture.service";
-import  { CaptureRequestDto } from "./dto/capture-request.dto";
+import { AssistantCaptureService } from "../assistant/assistant-capture.service";
+import { TaskService } from "../tasks/task.service";
+import { CaptureRequestDto } from "./dto/capture-request.dto";
 
 @Injectable()
 export class CaptureService {
@@ -13,7 +13,7 @@ export class CaptureService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taskService: TaskService,
-    private readonly agentCaptureService: AgentCaptureService,
+    private readonly assistantCaptureService: AssistantCaptureService,
   ) {}
 
   async quickAdd(dto: CaptureRequestDto) {
@@ -50,13 +50,13 @@ export class CaptureService {
       needsBreakdown: true,
     });
 
-    // Trigger agent processing with WebSocket callbacks (runs in background)
+    // Trigger assistant processing with WebSocket callbacks (runs in background)
     // This will show progress to users in real-time
-    this.agentCaptureService
-      .processTaskWithAgentsAsync(task.id, board.id)
+    this.assistantCaptureService
+      .processTaskWithAssistantAsync(task.id, board.id)
       .catch((error) => {
         this.logger.error(
-          `Failed to start agent processing for task ${task.id}: ${error}`,
+          `Failed to start assistant processing for task ${task.id}: ${error}`,
         );
       });
 

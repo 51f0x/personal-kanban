@@ -10,15 +10,13 @@
         "lint": "biome check .",
         "lint:fix": "biome check --write .",
         "format": "biome format --write .",
-        "db:generate": "prisma generate",
-        "db:migrate": "prisma migrate dev",
-        "db:migrate:deploy": "prisma migrate deploy",
-        "db:seed": "ts-node prisma/seed.ts",
-        "db:reset": "prisma migrate reset --force",
-        "db:studio": "prisma studio"
-    },
-    "prisma": {
-        "seed": "ts-node prisma/seed.ts"
+        "db:generate": "pnpm --filter @personal-kanban/api db:generate && pnpm --filter @personal-kanban/worker db:generate",
+        "db:migrate": "pnpm --filter @personal-kanban/api db:migrate",
+        "db:migrate:worker": "pnpm --filter @personal-kanban/worker db:migrate",
+        "db:migrate:deploy": "pnpm --filter @personal-kanban/api db:migrate:deploy && pnpm --filter @personal-kanban/worker db:migrate:deploy",
+        "db:seed": "pnpm --filter @personal-kanban/api db:seed",
+        "db:reset": "pnpm --filter @personal-kanban/api db:reset",
+        "db:studio": "pnpm --filter @personal-kanban/api db:studio"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.2.2",
@@ -27,6 +25,7 @@
         "@swc/cli": "^0.7.8",
         "@swc/core": "^1.13.5",
         "@types/node": "^24.3.0",
+        "dotenv-cli": "^7.4.2",
         "prisma": "^6.14.0",
         "source-map-support": "^0.5.21",
         "ts-loader": "^9.5.4",

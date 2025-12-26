@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@personal-kanban/shared";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { PrismaService } from "@personal-kanban/shared";
 import { Prisma, TaskContext } from "@prisma/client";
 import { HintService } from "./hint.service";
 import {
@@ -19,7 +19,7 @@ export class AgentApplicationService {
   private readonly logger = new Logger(AgentApplicationService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject("PrismaService") private readonly prisma: PrismaService,
     private readonly hintService: HintService,
   ) {}
 
@@ -81,18 +81,13 @@ export class AgentApplicationService {
       await emitProgress(
         "applying-results",
         20,
-        "Applying selected hints to task...",
+        "Preparing results for API...",
       );
 
-      const task = await this.prisma.task.findUnique({
-        where: { id: taskId },
-        include: { checklist: true, hints: true },
-      });
-
-      if (!task) {
-        throw new Error(`Task not found: ${taskId}`);
-      }
-
+      // Worker does not query database - all data comes from Redis message
+      // Results are sent back to API via result queue, and API applies them
+      // Hints are created here and stored in worker database
+      
       const updates: {
         title?: string;
         description?: string;
@@ -118,7 +113,8 @@ export class AgentApplicationService {
         const suggestedDesc = results.taskAnalysis?.suggestedDescription;
         const summary = results.summarization?.summary;
         const keyPoints = results.summarization?.keyPoints;
-        const currentDesc = task.description || "";
+        // Use original description from results (from Redis message)
+        const currentDesc = results.description || "";
 
         // Build an executable work description that combines:
         // 1. Suggested description (from task analysis - most important)
@@ -171,67 +167,55 @@ export class AgentApplicationService {
       }
 
       // Collect checklist items from actions
+      // Position will be determined by API when applying results
       if (
         options?.addChecklistFromActions &&
         results.actionExtraction?.actions
       ) {
-        const existingCount = task.checklist.length;
-        results.actionExtraction.actions.forEach((action, index) => {
+        results.actionExtraction.actions.forEach((action) => {
           checklistItems.push({
             title: action.description,
             isDone: false,
-            position: existingCount + index,
+            position: 0, // Will be set by API
           });
         });
       }
 
       // Store minimal metadata (processing info, not the full results)
       // Hints are created separately at the beginning of this method
-      const existingMetadata = (task.metadata || {}) as Record<string, unknown>;
+      const hintCount = await this.prisma.hint.count({ where: { taskId } });
       updates.metadata = {
-        ...existingMetadata,
         agentProcessing: {
           processedAt: new Date().toISOString(),
           processingTimeMs: results.processingTimeMs,
           url: results.url,
-          hintCount: await this.prisma.hint.count({ where: { taskId } }),
+          hintCount,
           errors: results.errors,
         },
       } as Prisma.InputJsonValue;
 
-      // Apply updates in a transaction
-      await emitProgress("applying-results", 50, "Saving updates to task...");
+      // Note: Task updates are sent back to API via result queue
+      // The API will apply these updates to the task
+      // Worker only creates hints here
 
-      await this.prisma.$transaction(async (tx) => {
-        if (Object.keys(updates).length > 0) {
-          await tx.task.update({
-            where: { id: taskId },
-            data: updates,
-          });
-        }
-
-        // Add checklist items if any
-        if (checklistItems.length > 0) {
-          await tx.checklistItem.createMany({
-            data: checklistItems.map((item) => ({
-              taskId,
-              ...item,
-            })),
-          });
-        }
-      });
-
+      // Worker does not update tasks directly - API will apply updates when it receives results
+      // The results object already contains all the data needed for the API to apply updates
+      // (suggestedTitle, suggestedDescription, context, tags, actions, etc.)
+      
       await emitProgress(
         "applying-results",
         100,
-        "Results applied successfully",
+        "Results prepared for API",
         {
           checklistItemsAdded: checklistItems.length,
           tagsToAdd: tagsToAdd.length,
         },
       );
 
-      this.logger.log(`Applied agent results to task ${taskId}`);
+      this.logger.log(
+        `Prepared agent results for task ${taskId} (API will apply updates): ` +
+        `${checklistItems.length} checklist items, ${tagsToAdd.length} tags`,
+      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";

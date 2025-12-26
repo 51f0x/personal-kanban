@@ -124,8 +124,16 @@ export class CreateTaskUseCase {
 
     // Queue task for asynchronous agent processing
     // This happens in the background - task creation is immediate
+    // Send full task data - worker does not query database
+    const taskMetadata = (persistedTask.metadata || {}) as Record<string, unknown>;
     this.agentQueueService
-      .queueAgentProcessing(persistedTask.id, persistedTask.boardId)
+      .queueAgentProcessing(
+        persistedTask.id,
+        persistedTask.boardId,
+        persistedTask.title,
+        persistedTask.description,
+        taskMetadata,
+      )
       .catch((error) => {
         // Log but don't fail task creation if queuing fails
         console.error(

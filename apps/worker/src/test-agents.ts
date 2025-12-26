@@ -8,7 +8,8 @@
 
 import * as readline from "node:readline";
 import { ConfigService } from "@nestjs/config";
-import { PrismaService, TaskId } from "@personal-kanban/shared";
+import type { PrismaService } from "@personal-kanban/shared";
+import { TaskId } from "@personal-kanban/shared";
 import { ActionExtractorAgent } from "./modules/agents/agents/action-extractor.agent";
 import { AgentSelectorAgent } from "./modules/agents/agents/agent-selector.agent";
 import { ContentSummarizerAgent } from "./modules/agents/agents/content-summarizer.agent";

@@ -11,6 +11,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-kanban}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../scripts/init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -81,7 +82,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}?schema=api
       REDIS_URL: redis://redis:6379
       API_PORT: 3000
       API_HOST: 0.0.0.0
@@ -120,7 +121,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}?schema=worker
       REDIS_URL: redis://redis:6379
       NODE_ENV: ${NODE_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -181,7 +182,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-kanban}?schema=api
     command: ["npx", "prisma", "migrate", "deploy"]
     profiles:
       - migrate

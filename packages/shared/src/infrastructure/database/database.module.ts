@@ -1,15 +1,22 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService } from './prisma.service';
+import { PrismaService as ApiPrismaService } from './prisma.service';
 
 /**
- * Shared DatabaseModule
- * Provides PrismaService for both API and Worker containers
+ * API DatabaseModule
+ * Provides PrismaService for API container
+ * NOTE: Do NOT use this in worker - use WorkerDatabaseModule instead
  */
 @Global()
 @Module({
     imports: [ConfigModule],
-    providers: [PrismaService],
-    exports: [PrismaService],
+    providers: [
+        ApiPrismaService,
+        {
+            provide: 'PrismaService',
+            useExisting: ApiPrismaService,
+        },
+    ],
+    exports: [ApiPrismaService, 'PrismaService'],
 })
 export class DatabaseModule {}

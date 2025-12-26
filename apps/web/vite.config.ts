@@ -7,10 +7,9 @@ import { defineConfig } from 'vite';
 export default defineConfig({
     plugins: [react(), tailwindcss()],
 
-    // Load .env files from project root (../../)
-    // Note: Vite will look for .env, .env.local, etc. in the root directory
-    // For .env.web, you may need to copy it to apps/web/.env or create a symlink
-    envDir: resolve(__dirname, '../..'),
+    // Load .env files from local directory first, then fallback to root
+    // Vite will look for .env, .env.local, etc. in apps/web/ first
+    envDir: resolve(__dirname, '.'),
     envPrefix: 'VITE_',
 
     server: {

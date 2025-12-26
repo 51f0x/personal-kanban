@@ -7,6 +7,7 @@ import { AgentProgressService } from "./agent-progress.service";
 import { AgentQueueModule } from "./agent-queue.module";
 import { AgentResultQueueModule } from "./agent-result-queue.module";
 import { AgentsController } from "./agents.controller";
+import { AgentCaptureService } from "./agent-capture.service";
 
 /**
  * Agent API Module (formerly AgentsModule)
@@ -21,7 +22,7 @@ import { AgentsController } from "./agents.controller";
     AgentResultQueueModule,
   ],
   controllers: [AgentsController, AgentProgressController],
-  providers: [AgentProgressService],
-  exports: [AgentProgressService, AgentQueueModule],
+  providers: [AgentProgressService, AgentCaptureService],
+  exports: [AgentProgressService, AgentCaptureService, AgentQueueModule],
 })
 export class AgentApiModule {}

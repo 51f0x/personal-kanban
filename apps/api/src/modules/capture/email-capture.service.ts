@@ -1,4 +1,4 @@
-import  { PrismaService } from "@personal-kanban/shared";
+import { PrismaService } from "@personal-kanban/shared";
 import { Prisma } from "@prisma/client";
 import {
   BadRequestException,
@@ -8,9 +8,9 @@ import {
 } from "@nestjs/common";
 import { parseCaptureText } from "@personal-kanban/shared";
 
-import  { TaskService } from "../tasks/task.service";
-import  { AgentCaptureService } from "./agent-capture.service";
-import  { EmailWebhookDto } from "./dto/email-webhook.dto";
+import { AssistantCaptureService } from "../assistant/assistant-capture.service";
+import { TaskService } from "../tasks/task.service";
+import { EmailWebhookDto } from "./dto/email-webhook.dto";
 
 @Injectable()
 export class EmailCaptureService {
@@ -19,7 +19,7 @@ export class EmailCaptureService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly taskService: TaskService,
-    private readonly agentCaptureService: AgentCaptureService,
+    private readonly assistantCaptureService: AssistantCaptureService,
   ) {}
 
   /**
@@ -136,12 +136,12 @@ export class EmailCaptureService {
       `Created task ${task.id} from email sent by ${senderEmail}`,
     );
 
-    // Trigger agent processing with WebSocket callbacks (runs in background)
-    this.agentCaptureService
-      .processTaskWithAgentsAsync(task.id, board.id)
+    // Trigger assistant processing with WebSocket callbacks (runs in background)
+    this.assistantCaptureService
+      .processTaskWithAssistantAsync(task.id, board.id)
       .catch((error) => {
         this.logger.error(
-          `Failed to start agent processing for task ${task.id}: ${error}`,
+          `Failed to start assistant processing for task ${task.id}: ${error}`,
         );
       });
 

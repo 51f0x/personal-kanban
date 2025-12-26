@@ -3,6 +3,12 @@ import { ConfigService } from "@nestjs/config";
 import { chromium, firefox, Browser, Page } from "playwright";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
+import {
+  CONFIDENCE_THRESHOLDS,
+  CONTENT_LIMITS,
+  LLM_TEMPERATURE,
+  NETWORK_TIMEOUTS,
+} from "../core/agent-constants";
 import { BaseAgent } from "../core/base-agent";
 import { INPUT_LIMITS } from "../../../shared/utils/input-validator.util";
 
@@ -151,7 +157,7 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         headers: {
           "User-Agent": this.userAgent,
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(NETWORK_TIMEOUTS.HEAD_REQUEST),
       });
 
       if (!headResponse.ok) {
@@ -173,7 +179,7 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
             Accept:
               "text/html,application/xhtml+xml,application/xml;text/plain,*/*",
           },
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(NETWORK_TIMEOUTS.STANDARD_FETCH),
         });
 
         if (!response.ok) {
@@ -190,7 +196,10 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: textContent.length > 0 ? 0.9 : 0.5,
+          confidence:
+            textContent.length > 0
+              ? CONFIDENCE_THRESHOLDS.EXCELLENT
+              : CONFIDENCE_THRESHOLDS.MEDIUM,
           url,
           content: textContent,
           textContent,
@@ -216,11 +225,13 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         // Navigate to the page with timeout
         await page.goto(url, {
           waitUntil: "networkidle", // Wait until network is idle
-          timeout: 60000, // 60 second timeout
+          timeout: NETWORK_TIMEOUTS.BROWSER_NAVIGATION,
         });
 
         // Additional wait for any lazy-loaded content or dynamic rendering
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds for async content to load
+        await new Promise((resolve) =>
+          setTimeout(resolve, NETWORK_TIMEOUTS.ASYNC_CONTENT_DELAY),
+        );
 
         // Get the fully rendered HTML
         const htmlContent = await page.content();
@@ -265,7 +276,8 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         // Step 2: Fallback to DOM density if Readability failed or produced poor results
         if (
           !extractedContent ||
-          extractedContent.trim().length < 200 ||
+          extractedContent.trim().length <
+            CONTENT_LIMITS.MIN_EXTRACTION_LENGTH ||
           extractionMethod === "none"
         ) {
           try {
@@ -369,7 +381,10 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: content.length > 0 ? 0.95 : 0.5,
+          confidence:
+            content.length > 0
+              ? CONFIDENCE_THRESHOLDS.MAXIMUM
+              : CONFIDENCE_THRESHOLDS.MEDIUM,
           url,
           title: title || undefined,
           content: content,
@@ -409,7 +424,7 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
             Accept:
               "text/html,application/xhtml+xml,application/xml;text/plain,*/*",
           },
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(NETWORK_TIMEOUTS.STANDARD_FETCH),
         });
 
         if (!response.ok) {
@@ -429,7 +444,10 @@ export class WebContentAgent extends BaseAgent implements OnModuleDestroy {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: content.length > 0 ? 0.8 : 0.5,
+          confidence:
+            content.length > 0
+              ? CONFIDENCE_THRESHOLDS.VERY_HIGH
+              : CONFIDENCE_THRESHOLDS.MEDIUM,
           url,
           title: title || undefined,
           content: content,
@@ -560,20 +578,13 @@ ${contentToClean}
         truncated: content.length !== contentToClean.length,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            options: {
-              temperature: 0.2, // Low temperature for factual cleanup
-            },
-          }),
-        "content cleanup",
-      );
-
-      const cleaned = (response.response || "").trim();
+      const cleaned = (
+        await this.generateLlmResponse(prompt, {
+          context: "content cleanup",
+          format: "text",
+          temperature: LLM_TEMPERATURE.FACTUAL, // Low temperature for factual cleanup
+        })
+      ).trim();
       return cleaned.length > 0 ? cleaned : content; // Fallback to original if LLM returns empty
     } catch (error) {
       this.logError("LLM cleanup failed", error);

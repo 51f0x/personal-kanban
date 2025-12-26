@@ -10,7 +10,19 @@ export * from './domain/entities';
 // ============================================================
 // Infrastructure Layer Exports
 // ============================================================
-export * from './infrastructure/database';
+// Export types first (safe to import anywhere)
+export type { IPrismaService, PrismaService as IPrismaServiceType } from './infrastructure/database/prisma-service.types';
+
+// Export database implementations (be careful - these load Prisma clients)
+// PrismaService is the API implementation (for backward compatibility)
+export {
+    PrismaService,
+    ApiPrismaService,
+    ApiPrismaServiceImpl,
+    WorkerPrismaService,
+    DatabaseModule,
+} from './infrastructure/database';
+
 export * from './infrastructure/config';
 export * from './infrastructure/queues';
 

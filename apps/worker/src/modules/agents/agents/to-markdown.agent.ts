@@ -1,6 +1,10 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { validateContentSize } from "../../../shared/utils/input-validator.util";
+import {
+  CONFIDENCE_THRESHOLDS,
+  LLM_TEMPERATURE,
+} from "../core/agent-constants";
 import { BaseAgent } from "../core/base-agent";
 import { AgentResult } from "../types/types";
 
@@ -36,7 +40,7 @@ export class ToMarkdownAgent extends BaseAgent {
       return {
         agentId: this.agentId,
         success: true,
-        confidence: 1.0,
+        confidence: CONFIDENCE_THRESHOLDS.MAXIMUM,
         formattedDescription: "",
         originalLength: 0,
         formattedLength: 0,
@@ -66,21 +70,11 @@ export class ToMarkdownAgent extends BaseAgent {
         `Formatting description to markdown for task: ${title.substring(0, 50)}...`,
       );
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.2, // Low temperature for consistent formatting
-            },
-          }),
-        "format-description-to-markdown",
-      );
-
-      const formatText = response.response || "";
+      const formatText = await this.generateLlmResponse(prompt, {
+        context: "format-description-to-markdown",
+        format: "json",
+        temperature: LLM_TEMPERATURE.FACTUAL, // Low temperature for consistent formatting
+      });
 
       try {
         const formatResult = JSON.parse(formatText) as {
@@ -94,7 +88,8 @@ export class ToMarkdownAgent extends BaseAgent {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: formatResult.confidence || 0.9,
+          confidence:
+            formatResult.confidence || CONFIDENCE_THRESHOLDS.EXCELLENT,
           formattedDescription,
           originalLength: description.length,
           formattedLength: formattedDescription.length,
@@ -113,7 +108,7 @@ export class ToMarkdownAgent extends BaseAgent {
         return {
           agentId: this.agentId,
           success: false,
-          confidence: 0.5,
+          confidence: CONFIDENCE_THRESHOLDS.MEDIUM,
           error: "Failed to parse format response",
           formattedDescription: description,
           originalLength: description.length,

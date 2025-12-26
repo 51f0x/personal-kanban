@@ -1,9 +1,15 @@
 import { resolve } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
-import { workerConfigSchema } from '@personal-kanban/shared';
+// Import directly from config file to avoid loading database exports (which include PrismaService)
+// Use require to avoid loading the entire shared package index
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { workerConfigSchema } = require('@personal-kanban/shared/dist/infrastructure/config/base-config.schema');
 
-// Resolve root .env paths (works from apps/worker directory)
+// Resolve env paths (prioritize local .env files)
+const localEnvPath = resolve(process.cwd(), '.env');
+const localEnvWorkerPath = resolve(process.cwd(), '.env.worker');
+const localEnvLocalPath = resolve(process.cwd(), '.env.local');
 const rootEnvPath = resolve(process.cwd(), '../../.env');
 const rootEnvWorkerPath = resolve(process.cwd(), '../../.env.worker');
 const rootEnvLocalPath = resolve(process.cwd(), '../../.env.local');
@@ -13,9 +19,11 @@ const rootEnvLocalPath = resolve(process.cwd(), '../../.env.local');
         NestConfigModule.forRoot({
             isGlobal: true,
             envFilePath: [
-                '.env.worker',
-                '.env.local',
-                '.env',
+                // Local .env files (highest priority)
+                localEnvPath,
+                localEnvWorkerPath,
+                localEnvLocalPath,
+                // Root .env files (fallback)
                 rootEnvWorkerPath,
                 rootEnvLocalPath,
                 rootEnvPath,

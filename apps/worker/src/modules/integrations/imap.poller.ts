@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ImapFlow } from 'imapflow';
-import { QuickTaskService } from '../capture/quick-task.service';
+import { QuickTaskService } from '../capture-worker/quick-task.service';
 
 @Injectable()
 export class ImapPollerService implements OnModuleInit, OnModuleDestroy {

@@ -1,14 +1,18 @@
 import { Processor, WorkerHost } from "@nestjs/bullmq";
-import { Logger, type OnApplicationShutdown } from "@nestjs/common";
-import { PrismaService } from "@personal-kanban/shared";
+import { Inject, Logger, type OnApplicationShutdown } from "@nestjs/common";
+import type { PrismaService } from "@personal-kanban/shared";
 import { Job } from "bullmq";
 import { AgentResultSenderService } from "../services/agent-result-sender.service";
 import { TaskProcessorService } from "../services/task-processor.service";
 
 interface AgentProcessingJobData {
   taskId: string;
-  boardId?: string; // Optional, can be extracted from task if needed
-  progressCallbackUrl?: string; // Deprecated - kept for backward compatibility
+  boardId: string;
+  title: string;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  // Deprecated fields - kept for backward compatibility
+  progressCallbackUrl?: string;
 }
 
 /**
@@ -24,7 +28,7 @@ export class AgentJobProcessor
 
   constructor(
     private readonly taskProcessorService: TaskProcessorService,
-    private readonly prisma: PrismaService,
+    @Inject("PrismaService") private readonly prisma: PrismaService,
     private readonly resultSenderService: AgentResultSenderService,
   ) {
     super();
@@ -36,7 +40,7 @@ export class AgentJobProcessor
   }
 
   async process(job: Job<AgentProcessingJobData>): Promise<void> {
-    const { taskId, boardId } = job.data;
+    const { taskId, boardId, title, description, metadata } = job.data;
 
     // Validate job data
     if (!taskId || typeof taskId !== "string" || taskId.trim().length === 0) {
@@ -45,36 +49,33 @@ export class AgentJobProcessor
       );
     }
 
-    if (
-      boardId !== undefined &&
-      (typeof boardId !== "string" || boardId.trim().length === 0)
-    ) {
+    if (!boardId || typeof boardId !== "string" || boardId.trim().length === 0) {
       throw new Error(
-        "Invalid boardId in job data: boardId must be a non-empty string if provided",
+        "Invalid boardId in job data: boardId must be a non-empty string",
+      );
+    }
+
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      throw new Error(
+        "Invalid title in job data: title must be a non-empty string",
       );
     }
 
     this.logger.log(`Processing agent job for task ${taskId}`);
 
     try {
-      // Get boardId from task if not provided
-      let taskBoardId = boardId;
-      if (!taskBoardId) {
-        const task = await this.prisma.task.findUnique({
-          where: { id: taskId },
-          select: { boardId: true },
-        });
-        if (!task) {
-          throw new Error(`Task ${taskId} not found`);
-        }
-        taskBoardId = task.boardId;
-      }
-
       // Process task with agents and get results
+      // All task data comes from the Redis message - worker does not query database
       // Progress events are now published via event bus instead of HTTP callbacks
       // updateTask: true means results will be applied to task and hints created
       const results = await this.taskProcessorService.processTaskWithAgents(
         taskId,
+        boardId,
+        {
+          title,
+          description: description || undefined,
+          metadata: metadata || {},
+        },
         {
           updateTask: true, // Apply results to task and create hints
           skipWebContent: false,
@@ -85,7 +86,7 @@ export class AgentJobProcessor
 
       // Send results back to API via queue
       if (results) {
-        await this.resultSenderService.sendResult(taskId, taskBoardId, results);
+        await this.resultSenderService.sendResult(taskId, boardId, results);
       }
 
       this.logger.log(`Completed agent processing for task ${taskId}`);

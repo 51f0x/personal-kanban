@@ -133,13 +133,43 @@ export function AppSidebar({ boardId }: AppSidebarProps) {
         if (path.startsWith('/board/') && boardId) {
             return location.pathname === `/board/${boardId}`;
         }
-        // Check for GTD views
-        if (path === '/someday') return location.pathname === '/someday';
-        if (path === '/waiting') return location.pathname === '/waiting';
-        if (path === '/stale') return location.pathname === '/stale';
-        if (path === '/clarify') return location.pathname === '/clarify';
-        if (path === '/projects') return location.pathname === '/projects';
-        if (path === '/analytics') return location.pathname === '/analytics';
+        // Check for GTD views and board sub-routes
+        if (path === '/someday') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/someday` ||
+                  location.pathname === `/boards/${boardId}/someday`
+                : location.pathname === '/someday';
+        }
+        if (path === '/waiting') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/waiting` ||
+                  location.pathname === `/boards/${boardId}/waiting`
+                : location.pathname === '/waiting';
+        }
+        if (path === '/stale') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/stale` ||
+                  location.pathname === `/boards/${boardId}/stale`
+                : location.pathname === '/stale';
+        }
+        if (path === '/clarify') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/clarify` ||
+                  location.pathname === `/boards/${boardId}/clarify`
+                : location.pathname === '/clarify';
+        }
+        if (path === '/projects') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/projects` ||
+                  location.pathname === `/boards/${boardId}/projects`
+                : location.pathname === '/projects';
+        }
+        if (path === '/analytics') {
+            return boardId
+                ? location.pathname === `/board/${boardId}/analytics` ||
+                  location.pathname === `/boards/${boardId}/analytics`
+                : location.pathname === '/analytics';
+        }
         return false;
     };
 

@@ -1,6 +1,7 @@
 import { forwardRef, Module } from "@nestjs/common";
 import { DatabaseModule } from "@personal-kanban/shared";
 
+import { AssistantModule } from "../assistant/assistant.module";
 import { AgentQueueModule } from "../agents/agent-queue.module";
 import { BoardModule } from "../boards/board.module";
 import { RealtimeModule } from "../realtime/realtime.module";
@@ -28,6 +29,7 @@ import { TaskService } from "./task.service";
     forwardRef(() => BoardModule),
     TagModule,
     AgentQueueModule,
+    AssistantModule,
   ],
   controllers: [TaskController, ChecklistController, HintsController],
   providers: [

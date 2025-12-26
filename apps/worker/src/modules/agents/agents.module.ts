@@ -1,7 +1,6 @@
 import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { DatabaseModule } from "@personal-kanban/shared";
 import { ConfigModule } from "../../shared/config.module";
 import { ActionExtractorAgent } from "./agents/action-extractor.agent";
 import { AgentSelectorAgent } from "./agents/agent-selector.agent";
@@ -24,7 +23,6 @@ import { AgentJobProcessor } from "./processors/agent-job.processor";
 
 @Module({
   imports: [
-    DatabaseModule,
     ConfigModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],

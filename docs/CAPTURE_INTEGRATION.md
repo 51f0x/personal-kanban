@@ -20,7 +20,7 @@ CaptureController receives request
   ↓
 CaptureService creates task
   ↓
-AgentCaptureService.processTaskWithAgentsAsync() (background)
+AgentCaptureService.processTaskWithAgentsAsync() (background, provided by agents feature)
   ↓
 AgentProgressService broadcasts progress via WebSocket
   ↓

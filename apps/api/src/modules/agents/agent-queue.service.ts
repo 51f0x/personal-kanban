@@ -4,8 +4,12 @@ import { Injectable, Logger } from "@nestjs/common";
 
 export interface AgentProcessingJobData {
   taskId: string;
-  boardId?: string; // Optional, can be extracted from task if needed
-  progressCallbackUrl?: string; // Deprecated - kept for backward compatibility, events are used instead
+  boardId: string;
+  title: string;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  // Deprecated fields - kept for backward compatibility
+  progressCallbackUrl?: string;
 }
 
 @Injectable()
@@ -20,14 +24,24 @@ export class AgentQueueService {
   /**
    * Queue a task for agent processing
    * Progress updates are now sent via domain events instead of HTTP callbacks
+   * All task data must be provided in the message - worker does not query database
    */
-  async queueAgentProcessing(taskId: string, boardId?: string): Promise<void> {
+  async queueAgentProcessing(
+    taskId: string,
+    boardId: string,
+    title: string,
+    description: string | null,
+    metadata: Record<string, unknown> | null,
+  ): Promise<void> {
     try {
       await this.agentQueue.add(
         "process-task",
         {
           taskId,
           boardId,
+          title,
+          description,
+          metadata: metadata || {},
         },
         {
           jobId: `agent-processing-${taskId}`, // Unique job ID to prevent duplicates

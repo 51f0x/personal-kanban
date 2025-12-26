@@ -6,6 +6,11 @@ import {
   INPUT_LIMITS,
   validateContentSize,
 } from "../../../shared/utils/input-validator.util";
+import {
+  AGENT_DEFAULTS,
+  CONFIDENCE_THRESHOLDS,
+  LLM_TEMPERATURE,
+} from "../core/agent-constants";
 import { BaseAgent } from "../core/base-agent";
 
 export interface SummarizationResult {
@@ -29,8 +34,8 @@ export interface SummarizationResult {
 export class ContentSummarizerAgent extends BaseAgent {
   readonly agentId = "content-summarizer-agent";
 
-  readonly maxLength = 1000;
-  readonly minLength = 100;
+  readonly maxLength = AGENT_DEFAULTS.SUMMARY_LENGTH;
+  readonly minLength = AGENT_DEFAULTS.MIN_SUMMARY_LENGTH;
 
   constructor(config: ConfigService) {
     super(config, ContentSummarizerAgent.name);
@@ -44,7 +49,7 @@ export class ContentSummarizerAgent extends BaseAgent {
     */
   async summarize(
     content: string,
-    maxLength = 1000,
+    maxLength = AGENT_DEFAULTS.SUMMARY_LENGTH,
     taskTitle?: string,
     taskDescription?: string,
   ): Promise<SummarizationResult> {
@@ -66,14 +71,13 @@ export class ContentSummarizerAgent extends BaseAgent {
         "Content validation failed",
         new Error(validation.error || "Invalid content"),
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: validation.error || "Content validation failed",
-        originalLength: content.length,
-        summary: "",
-      };
+      return this.createErrorResult<SummarizationResult>(
+        validation.error || "Content validation failed",
+        {
+          originalLength: content.length,
+          summary: "",
+        } as Partial<SummarizationResult>,
+      );
     }
 
     try {
@@ -100,21 +104,11 @@ export class ContentSummarizerAgent extends BaseAgent {
         truncated: content.length !== contentToSummarize.length,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.3, // Lower temperature for factual summarization
-            },
-          }),
-        "content summarization",
-      );
-
-      const summaryText = response.response || "";
+      const summaryText = await this.generateLlmResponse(prompt, {
+        context: "content summarization",
+        format: "json",
+        temperature: LLM_TEMPERATURE.CONSISTENT, // Lower temperature for factual summarization
+      });
 
       // Parse and validate JSON (LLM response doesn't include agentId/success/originalLength/wordCount)
       const parseResult = parseAndValidateJson(
@@ -141,7 +135,10 @@ export class ContentSummarizerAgent extends BaseAgent {
         return {
           agentId: this.agentId,
           success: true,
-          confidence: parsed.summary.length > 0 ? 0.85 : 0.5,
+          confidence:
+            parsed.summary.length > 0
+              ? CONFIDENCE_THRESHOLDS.EXCELLENT
+              : CONFIDENCE_THRESHOLDS.MEDIUM,
           originalLength,
           summary: parsed.summary,
           keyPoints:
@@ -169,7 +166,7 @@ export class ContentSummarizerAgent extends BaseAgent {
       return {
         agentId: this.agentId,
         success: true,
-        confidence: 0.6,
+        confidence: CONFIDENCE_THRESHOLDS.MEDIUM_HIGH,
         originalLength,
         summary: fallbackSummary,
         wordCount: fallbackSummary.split(/\s+/).length,
@@ -183,14 +180,13 @@ export class ContentSummarizerAgent extends BaseAgent {
       this.logError("Error summarizing content", error, {
         contentLength: content.length,
       });
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
-        originalLength: content.length,
-        summary: "",
-      };
+      return this.createErrorResult<SummarizationResult>(
+        this.extractErrorMessage(error),
+        {
+          originalLength: content.length,
+          summary: "",
+        } as Partial<SummarizationResult>,
+      );
     }
   }
 

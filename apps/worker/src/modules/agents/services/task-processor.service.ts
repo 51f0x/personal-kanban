@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@personal-kanban/shared";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { PrismaService } from "@personal-kanban/shared";
 import { ToMarkdownAgent } from "../agents/to-markdown.agent";
 import { AgentApplicationService } from "./agent-application.service";
 import { AgentOrchestrator } from "./agent-orchestrator.service";
@@ -14,7 +14,7 @@ export class TaskProcessorService {
   private readonly logger = new Logger(TaskProcessorService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject("PrismaService") private readonly prisma: PrismaService,
     private readonly agentOrchestrator: AgentOrchestrator,
     private readonly agentApplicationService: AgentApplicationService,
     private readonly toMarkdownAgent: ToMarkdownAgent,
@@ -25,9 +25,16 @@ export class TaskProcessorService {
    * Can be called from a BullMQ job processor
    * Supports progress callbacks for real-time updates
    * Returns processing results for sending back to API
+   * All task data must be provided - worker does not query database
    */
   async processTaskWithAgents(
     taskId: string,
+    boardId: string,
+    taskData: {
+      title: string;
+      description?: string;
+      metadata: Record<string, unknown>;
+    },
     options?: {
       updateTask?: boolean;
       skipWebContent?: boolean;
@@ -39,11 +46,17 @@ export class TaskProcessorService {
       this.logger.log(`Starting agent processing for task ${taskId}`);
 
       // Process task with all agents
-      const results = await this.agentOrchestrator.processTask(taskId, {
-        skipWebContent: options?.skipWebContent,
-        skipSummarization: options?.skipSummarization,
-        onProgress: options?.onProgress,
-      });
+      // All task data comes from Redis message - worker does not query database
+      const results = await this.agentOrchestrator.processTask(
+        taskId,
+        boardId,
+        taskData,
+        {
+          skipWebContent: options?.skipWebContent,
+          skipSummarization: options?.skipSummarization,
+          onProgress: options?.onProgress,
+        },
+      );
 
       // Apply results to task if requested
       // Note: Hint creation is now handled inside AgentApplicationService
@@ -60,7 +73,18 @@ export class TaskProcessorService {
 
       // Step: Convert task description to markdown AFTER hints are auto-applied
       // This ensures markdown conversion uses the final description with applied hints
-      await this.convertDescriptionToMarkdown(taskId, options?.onProgress);
+      // Use the description from results if available, otherwise from original task data
+      const descriptionToFormat =
+        results.summary?.formattedDescription ||
+        results.description ||
+        taskData.description ||
+        "";
+      await this.convertDescriptionToMarkdown(
+        taskId,
+        taskData.title,
+        descriptionToFormat,
+        options?.onProgress,
+      );
 
       this.logger.log(
         `Completed agent processing for task ${taskId} ` +
@@ -81,29 +105,17 @@ export class TaskProcessorService {
   /**
    * Convert task description to markdown format
    * This is called after hints are auto-applied to ensure we format the final description
+   * Description is passed directly - worker does not query database
    */
   private async convertDescriptionToMarkdown(
     taskId: string,
+    title: string,
+    description: string,
     onProgress?: AgentProgressCallback,
   ): Promise<void> {
     try {
-      // Fetch the updated task (after hints were auto-applied)
-      const task = await this.prisma.task.findUnique({
-        where: { id: taskId },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-        },
-      });
-
-      if (!task) {
-        this.logger.warn(`Task ${taskId} not found for markdown conversion`);
-        return;
-      }
-
       // Skip if no description to format
-      if (!task.description || task.description.trim().length === 0) {
+      if (!description || description.trim().length === 0) {
         this.logger.log(
           `Skipping markdown conversion - no description for task ${taskId}`,
         );
@@ -122,20 +134,13 @@ export class TaskProcessorService {
 
       // Convert description to markdown
       const markdownResult = await this.toMarkdownAgent.formatToMarkdown(
-        task.title,
-        task.description,
+        title,
+        description,
       );
 
       if (markdownResult.success && markdownResult.formattedDescription) {
-        // Update task with markdown-formatted description
-        await this.prisma.task.update({
-          where: { id: taskId },
-          data: {
-            description: markdownResult.formattedDescription,
-          },
-        });
-
-        // Create a hint for the markdown conversion (for visibility, but it's already applied)
+        // Create a hint for the markdown conversion
+        // API will apply the formatted description when it receives results
         await this.prisma.hint.create({
           data: {
             taskId,
@@ -148,7 +153,7 @@ export class TaskProcessorService {
               formattedLength: markdownResult.formattedLength,
             },
             confidence: markdownResult.confidence,
-            applied: true, // Already applied since we updated the task
+            applied: false, // API will apply this when it receives results
           },
         });
 

@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["api", "worker"]
 }
 
 enum ColumnType {
@@ -15,6 +16,8 @@ enum ColumnType {
   SOMEDAY
   DONE
   ARCHIVE
+
+  @@schema("api")
 }
 
 enum TaskContext {
@@ -25,12 +28,16 @@ enum TaskContext {
   WATCH
   DESK
   OTHER
+
+  @@schema("api")
 }
 
 enum TaskPriority {
   LOW
   MEDIUM
   HIGH
+
+  @@schema("api")
 }
 
 enum TaskEventType {
@@ -40,6 +47,8 @@ enum TaskEventType {
   COMPLETED
   STALE
   RULE_TRIGGERED
+
+  @@schema("api")
 }
 
 model User {
@@ -59,6 +68,7 @@ model User {
   defaultBoard       Board?              @relation("UserDefaultBoard", fields: [defaultBoardId], references: [id], onDelete: SetNull)
   emailActionTokens  EmailActionToken[]
 
+  @@schema("api")
   @@index([defaultBoardId])
 }
 
@@ -80,6 +90,7 @@ model Board {
   templates   RecurringTemplate[]
   events      TaskEvent[]
 
+  @@schema("api")
   @@index([ownerId])
 }
 
@@ -94,23 +105,26 @@ model Column {
   board     Board      @relation(fields: [boardId], references: [id])
   tasks     Task[]
 
+  @@schema("api")
   @@index([boardId])
 }
 
 model Project {
-  id             String   @id @default(uuid()) @db.Uuid
-  boardId        String   @db.Uuid
-  ownerId        String   @db.Uuid
+  id             String      @id @default(uuid()) @db.Uuid
+  boardId        String      @db.Uuid
+  ownerId        String      @db.Uuid
   name           String
   description    String?
   desiredOutcome String?
-  status         String?  @default("active")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  board          Board    @relation(fields: [boardId], references: [id])
-  owner          User     @relation(fields: [ownerId], references: [id])
+  status         String?     @default("active")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  board          Board       @relation(fields: [boardId], references: [id])
+  owner          User        @relation(fields: [ownerId], references: [id])
   tasks          Task[]
+  localBrain     LocalBrain?
 
+  @@schema("api")
   @@index([boardId])
   @@index([ownerId])
 }
@@ -147,6 +161,7 @@ model Task {
   hints          Hint[]
   emailActionTokens EmailActionToken[]
 
+  @@schema("api")
   @@index([boardId])
   @@index([columnId])
   @@index([projectId])
@@ -165,6 +180,7 @@ model ChecklistItem {
   updatedAt DateTime @updatedAt
   task      Task     @relation(fields: [taskId], references: [id])
 
+  @@schema("api")
   @@index([taskId])
 }
 
@@ -178,6 +194,7 @@ model Tag {
   board     Board     @relation(fields: [boardId], references: [id])
   tasks     TaskTag[]
 
+  @@schema("api")
   @@unique([boardId, name])
 }
 
@@ -187,6 +204,7 @@ model TaskTag {
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
+  @@schema("api")
   @@id([taskId, tagId])
 }
 
@@ -203,6 +221,7 @@ model TaskEvent {
   task         Task          @relation(fields: [taskId], references: [id])
   board        Board         @relation(fields: [boardId], references: [id])
 
+  @@schema("api")
   @@index([boardId])
   @@index([taskId])
 }
@@ -224,6 +243,7 @@ model Rule {
   board       Board     @relation(fields: [boardId], references: [id])
   owner       User      @relation(fields: [ownerId], references: [id])
 
+  @@schema("api")
   @@index([boardId])
   @@index([ownerId])
 }
@@ -245,6 +265,7 @@ model RecurringTemplate {
   board       Board     @relation(fields: [boardId], references: [id])
   owner       User      @relation(fields: [ownerId], references: [id])
 
+  @@schema("api")
   @@index([boardId])
   @@index([ownerId])
 }
@@ -263,6 +284,7 @@ model Hint {
   updatedAt  DateTime @updatedAt
   task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+  @@schema("api")
   @@index([taskId])
   @@index([agentId])
   @@index([hintType])
@@ -281,8 +303,31 @@ model EmailActionToken {
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@schema("api")
   @@index([token])
   @@index([taskId])
   @@index([userId])
   @@index([expiresAt])
+}
+
+model LocalBrain {
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @unique @db.Uuid
+  objective      String   @default("")
+  context        Json?    // LocalBrain context
+  constraints    Json?    // LocalBrain constraints
+  openQuestions  Json?    // Array of open questions
+  taskBacklog    Json?    // Array of tasks
+  researchPlan   Json?    // Research plan
+  sources        Json?    // Array of sources
+  decisions      Json?    // Array of decisions
+  risks          Json?    // Array of risks
+  deliverables   Json?    // Deliverables
+  history        Json?    // Array of history entries
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@schema("api")
+  @@index([projectId])
 }

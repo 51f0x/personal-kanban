@@ -3,7 +3,7 @@ import { DatabaseModule } from "@personal-kanban/shared";
 
 import { HealthController } from "../presentation/health.controller";
 import { ConfigModule } from "../shared/config.module";
-import { AgentApiModule } from "./agents/agents.module";
+import { AssistantModule } from "./assistant/assistant.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
 import { AuthModule } from "./auth/auth.module";
 import { BoardModule } from "./boards/board.module";
@@ -40,7 +40,7 @@ import { TemplateModule } from "./templates/template.module";
     RealtimeModule,
     CaptureApiModule,
     LlmModule,
-    AgentApiModule,
+    AssistantModule,
     EmailActionsModule,
   ],
   controllers: [HealthController],

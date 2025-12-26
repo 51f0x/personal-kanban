@@ -2,6 +2,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { ContextFilterBar } from '@/components/ContextFilterBar';
 import { HintsPanel } from '@/components/HintsPanel';
 import { ProjectFilter } from '@/components/ProjectFilter';
+import { ProjectsManagement } from '@/components/ProjectsManagement';
 import { SearchDialog } from '@/components/SearchDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 import { BoardAnalytics } from '@/components/analytics/BoardAnalytics';
@@ -1692,8 +1693,7 @@ export function BoardView() {
     const location = useLocation();
 
     // Check route for filter tabs
-    const pathname = location.pathname;
-    const getInitialTab = () => {
+    const getInitialTab = (pathname: string) => {
         if (pathname.endsWith('/stale')) return 'Stale Tasks';
         if (pathname.endsWith('/someday')) return 'Someday';
         if (pathname.endsWith('/waiting')) return 'Waiting';
@@ -1701,11 +1701,16 @@ export function BoardView() {
         if (pathname.endsWith('/analytics')) return 'Analytics';
         return 'By Total Tasks';
     };
-    const [activeTab, setActiveTab] = useState(getInitialTab());
+    const [activeTab, setActiveTab] = useState(() => getInitialTab(location.pathname));
     const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
     const [board, setBoard] = useState<Board | null>(null);
     const [loadingBoard, setLoadingBoard] = useState(true);
     const [boardError, setBoardError] = useState<string | null>(null);
+
+    // Update activeTab when route changes
+    useEffect(() => {
+        setActiveTab(getInitialTab(location.pathname));
+    }, [location.pathname]);
     const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
     const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
     const [showTaskDialog, setShowTaskDialog] = useState(false);
@@ -1736,55 +1741,59 @@ export function BoardView() {
     );
 
     // Fetch board data
-    useEffect(() => {
+    const loadBoard = useCallback(async () => {
         if (!boardId) {
             setBoardError('Board ID is required');
             setLoadingBoard(false);
             return;
         }
 
-        const loadBoard = async () => {
-            setLoadingBoard(true);
-            setBoardError(null);
-            try {
-                const boardData = await fetchBoardById(boardId);
-                if (!boardData) {
-                    throw new Error('Board not found');
-                }
-                // Ensure columns array exists
-                if (!boardData.columns) {
-                    boardData.columns = [];
-                }
-                setBoard(boardData);
-            } catch (err) {
-                setBoardError(err instanceof Error ? err.message : 'Failed to load board');
-                // If board not found, redirect to default board or empty view
-                if (user?.id) {
-                    try {
-                        const boards = await fetchBoards(user.id);
-                        if (boards.length > 0) {
-                            // Redirect to default board or first board
-                            const defaultBoard =
-                                boards.find((b) => b.id === user.defaultBoardId) || boards[0];
-                            navigate(`/board/${defaultBoard.id}`, { replace: true });
-                            return;
-                        }
-                        // No boards, redirect to empty view
-                        navigate('/board/empty', { replace: true });
-                        return;
-                    } catch {
-                        // If fetching boards fails, show error
-                        toast.error('Failed to load board');
-                    }
-                }
-                toast.error('Failed to load board');
-            } finally {
-                setLoadingBoard(false);
+        setLoadingBoard(true);
+        setBoardError(null);
+        try {
+            const boardData = await fetchBoardById(boardId);
+            if (!boardData) {
+                throw new Error('Board not found');
             }
-        };
-
-        loadBoard();
+            // Ensure columns array exists
+            if (!boardData.columns) {
+                boardData.columns = [];
+            }
+            setBoard(boardData);
+        } catch (err) {
+            setBoardError(err instanceof Error ? err.message : 'Failed to load board');
+            // If board not found, redirect to default board or empty view
+            if (user?.id) {
+                try {
+                    const boards = await fetchBoards(user.id);
+                    if (boards.length > 0) {
+                        // Redirect to default board or first board
+                        const defaultBoard =
+                            boards.find((b) => b.id === user.defaultBoardId) || boards[0];
+                        navigate(`/board/${defaultBoard.id}`, { replace: true });
+                        return;
+                    }
+                    // No boards, redirect to empty view
+                    navigate('/board/empty', { replace: true });
+                    return;
+                } catch {
+                    // If fetching boards fails, show error
+                    toast.error('Failed to load board');
+                }
+            }
+            toast.error('Failed to load board');
+        } finally {
+            setLoadingBoard(false);
+        }
     }, [boardId, user, navigate]);
+
+    useEffect(() => {
+        loadBoard();
+    }, [loadBoard]);
+
+    const refreshBoard = useCallback(() => {
+        loadBoard();
+    }, [loadBoard]);
 
     // Use tasks hook
     const {
@@ -2642,10 +2651,22 @@ function BoardViewContent({
                         </div>
                     </div>
 
-                    {/* Content Area - Kanban Board or Analytics */}
+                    {/* Content Area - Kanban Board, Projects, or Analytics */}
                     {activeTab === 'Analytics' ? (
                         <div className="flex flex-1 flex-col overflow-auto">
                             {boardId && <BoardAnalytics boardId={boardId} />}
+                        </div>
+                    ) : activeTab === 'Projects' ? (
+                        <div className="flex flex-1 flex-col overflow-auto">
+                            {board && (
+                                <ProjectsManagement
+                                    board={board}
+                                    onProjectChange={() => {
+                                        refreshBoard();
+                                        refreshTasks();
+                                    }}
+                                />
+                            )}
                         </div>
                     ) : (
                         <div className="flex flex-1 flex-col gap-4 p-4 lg:p-6">

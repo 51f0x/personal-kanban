@@ -3,9 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { parseAndValidateJson } from "@personal-kanban/shared";
 import { agentSelectionResultSchema } from "../../../shared/schemas/agent-schemas";
 import {
-  validateDescription,
-  validateTitle,
-} from "../../../shared/utils/input-validator.util";
+  AGENT_DEFAULTS,
+  CONFIDENCE_THRESHOLDS,
+  LLM_TEMPERATURE,
+} from "../core/agent-constants";
 import { BaseAgent } from "../core/base-agent";
 
 /**
@@ -42,38 +43,17 @@ export class AgentSelectorAgent extends BaseAgent {
     hasUrl?: boolean,
     urlContentLength?: number,
   ): Promise<AgentSelectionResult> {
-    // Validate inputs
-    const titleValidation = validateTitle(title);
-    if (!titleValidation.valid) {
-      this.logError(
-        "Title validation failed",
-        new Error(titleValidation.error || "Invalid title"),
-        {
-          title: title.substring(0, 50),
-        },
-      );
+    // Validate inputs - use defaults if validation fails
+    const inputValidation = this.validateTaskInputs(title, description, {
+      title: title.substring(0, 50),
+    });
+    if (!inputValidation.valid) {
       return this.getDefaultSelection(
         title,
         description,
         hasUrl,
         urlContentLength,
       );
-    }
-
-    if (description) {
-      const descValidation = validateDescription(description);
-      if (!descValidation.valid) {
-        this.logError(
-          "Description validation failed",
-          new Error(descValidation.error || "Invalid description"),
-        );
-        return this.getDefaultSelection(
-          title,
-          description,
-          hasUrl,
-          urlContentLength,
-        );
-      }
     }
 
     try {
@@ -91,21 +71,11 @@ export class AgentSelectorAgent extends BaseAgent {
         hasUrl,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.3, // Lower temperature for more consistent decisions
-            },
-          }),
-        "agent selection",
-      );
-
-      const selectionText = response.response || "";
+      const selectionText = await this.generateLlmResponse(prompt, {
+        context: "agent selection",
+        format: "json",
+        temperature: LLM_TEMPERATURE.CONSISTENT, // Lower temperature for more consistent decisions
+      });
 
       // Parse and validate JSON
       const parseResult = parseAndValidateJson(
@@ -169,10 +139,7 @@ export class AgentSelectorAgent extends BaseAgent {
     hasUrl?: boolean,
     urlContentLength?: number,
   ): string {
-    let taskText = title;
-    if (description) {
-      taskText += `\n\n${description}`;
-    }
+    const taskText = this.buildContentString(title, description);
 
     const urlInfo = hasUrl
       ? `\n\n[URL detected: ${urlContentLength ? `${urlContentLength} characters of content` : "Content available"}]`
@@ -239,7 +206,8 @@ Return only valid JSON, no markdown formatting.`;
   ): AgentSelectionResult {
     const shouldExtractActions = this.shouldExtractActions(title, description);
     const needsSummarization =
-      (hasUrl ?? false) && (urlContentLength || 0) > 500;
+      (hasUrl ?? false) &&
+      (urlContentLength || 0) > AGENT_DEFAULTS.MIN_CONTENT_FOR_SUMMARIZATION;
 
     return {
       shouldUseWebContent: hasUrl ?? false,
@@ -248,7 +216,7 @@ Return only valid JSON, no markdown formatting.`;
       shouldUseContextExtraction: true, // Usually useful
       shouldUseActionExtraction: shouldExtractActions,
       reasoning: "Default selection based on heuristics",
-      confidence: 0.7,
+      confidence: CONFIDENCE_THRESHOLDS.HIGH,
     };
   }
 

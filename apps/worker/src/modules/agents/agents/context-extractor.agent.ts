@@ -3,10 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { parseAndValidateJson } from "@personal-kanban/shared";
 import { TaskContext } from "@prisma/client";
 import { contextExtractionResponseSchema } from "../../../shared/schemas/agent-schemas";
-import {
-  validateDescription,
-  validateTitle,
-} from "../../../shared/utils/input-validator.util";
+import { LLM_TEMPERATURE } from "../core/agent-constants";
 import { ActionItem } from "./action-extractor.agent";
 import { BaseAgent } from "../core/base-agent";
 
@@ -46,34 +43,11 @@ export class ContextExtractorAgent extends BaseAgent {
     suggestedActions?: ActionItem[],
   ): Promise<ContextExtractionResult> {
     // Validate inputs
-    const titleValidation = validateTitle(title);
-    if (!titleValidation.valid) {
-      this.logError(
-        "Title validation failed",
-        new Error(titleValidation.error || "Invalid title"),
+    const inputValidation = this.validateTaskInputs(title, description);
+    if (!inputValidation.valid) {
+      return this.createErrorResult<ContextExtractionResult>(
+        inputValidation.error || "Invalid input",
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: titleValidation.error || "Invalid title",
-      };
-    }
-
-    if (description) {
-      const descValidation = validateDescription(description);
-      if (!descValidation.valid) {
-        this.logError(
-          "Description validation failed",
-          new Error(descValidation.error || "Invalid description"),
-        );
-        return {
-          agentId: this.agentId,
-          success: false,
-          confidence: 0,
-          error: descValidation.error || "Invalid description",
-        };
-      }
     }
 
     try {
@@ -94,21 +68,11 @@ export class ContextExtractorAgent extends BaseAgent {
         actionsCount: suggestedActions?.length || 0,
       });
 
-      const response = await this.callLlm(
-        () =>
-          this.ollama.generate({
-            model: this.model,
-            prompt,
-            stream: false,
-            format: "json",
-            options: {
-              temperature: 0.4, // Lower temperature for more consistent extraction
-            },
-          }),
-        "context extraction",
-      );
-
-      const extractionText = response.response || "";
+      const extractionText = await this.generateLlmResponse(prompt, {
+        context: "context extraction",
+        format: "json",
+        temperature: LLM_TEMPERATURE.BALANCED,
+      });
 
       // Parse and validate JSON (LLM response doesn't include agentId/success)
       const parseResult = parseAndValidateJson(
@@ -145,22 +109,14 @@ export class ContextExtractorAgent extends BaseAgent {
         "Failed to parse extraction result",
         new Error(errorMessage),
       );
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: errorMessage,
-      };
+      return this.createErrorResult<ContextExtractionResult>(errorMessage);
     } catch (error) {
       this.logError("Error extracting context", error, {
         title: title,
       });
-      return {
-        agentId: this.agentId,
-        success: false,
-        confidence: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return this.createErrorResult<ContextExtractionResult>(
+        this.extractErrorMessage(error),
+      );
     }
   }
 
@@ -173,26 +129,19 @@ export class ContextExtractorAgent extends BaseAgent {
     contentSummary?: string,
     suggestedActions?: ActionItem[],
   ): string {
-    let content = title;
-    if (description) {
-      content += `\n\n${description}`;
-    }
+    let content = this.buildContentString(title, description);
     if (contentSummary) {
       content += `\n\n[Content Summary]\n${contentSummary}`;
     }
 
-    let actionsText = "";
-    if (suggestedActions && suggestedActions.length > 0) {
-      actionsText = "\n\n[Suggested Actions to Guide Extraction]\n";
-      actionsText += suggestedActions
-        .map(
-          (action, idx) =>
-            `${idx + 1}. ${action.description}${action.priority ? ` (Priority: ${action.priority})` : ""}${action.estimatedDuration ? ` [Duration: ${action.estimatedDuration}]` : ""}`,
-        )
-        .join("\n");
-      actionsText +=
-        "\n\nUse these suggested actions to inform your context extraction. Consider what context, tags, and project hints would be most relevant given these actions.";
-    }
+    const actionsText = this.buildActionsText(
+      suggestedActions || [],
+      "Suggested Actions to Guide Extraction",
+    );
+    const actionsGuidance =
+      actionsText.length > 0
+        ? "\n\nUse these suggested actions to inform your context extraction. Consider what context, tags, and project hints would be most relevant given these actions."
+        : "";
 
     return `You are a work categorization assistant. Extract context, tags, and project hints to help organize and prepare work tasks for human execution.
 
@@ -207,7 +156,7 @@ Extract categorization metadata from the following task content. Return a JSON o
 }
 
 Task Content:
-${content}${actionsText}
+${content}${actionsText}${actionsGuidance}
 
 PREPARATION FOCUS - Help organize work:
 1. **Context**: Identify where/when this work should be done (EMAIL for email work, MEETING for meetings, READ for reading, DESK for computer work, etc.) to help organize workflow

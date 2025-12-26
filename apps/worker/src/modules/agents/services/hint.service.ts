@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "@personal-kanban/shared";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import type { PrismaService } from "@personal-kanban/shared";
 import { Prisma } from "@prisma/client";
 import { AgentProcessingResult } from "../types/types";
 
@@ -27,7 +27,7 @@ type HintCreator = (
 export class HintService {
   private readonly logger = new Logger(HintService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject("PrismaService") private readonly prisma: PrismaService) {}
 
   /**
    * Create hints from agent processing results
@@ -38,6 +38,8 @@ export class HintService {
     results: AgentProcessingResult,
   ): Promise<void> {
     try {
+      // Worker does not query database - task data comes from Redis message
+      // If task doesn't exist, foreign key constraint will handle it
       const hints = this.getHintCreators()
         .flatMap((creator) => creator(taskId, results))
         .filter(Boolean);
